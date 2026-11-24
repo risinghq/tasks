@@ -8,7 +8,7 @@ export const THEME_TITLES: Record<Theme, string> = {
 };
 
 /** The localStorage key. The inline script in index.html reads the same key before first paint. */
-const KEY = "bitacora.theme";
+const KEY = "tasks.theme";
 
 export function readTheme(): Theme {
   try {

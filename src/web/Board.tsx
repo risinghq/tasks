@@ -159,7 +159,7 @@ export function Board() {
         >
           <header className={styles.header}>
             <div className={styles.tools}>
-              <h1 className={styles.title}>Bitácora</h1>
+              <h1 className={styles.title}>Tareas</h1>
               <button
                 ref={filterButton}
                 type="button"

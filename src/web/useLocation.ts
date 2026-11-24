@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 
-const CHANGE = "bitacora:location";
+const CHANGE = "tasks:location";
 
 function subscribe(listener: () => void) {
   addEventListener("popstate", listener);

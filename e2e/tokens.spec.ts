@@ -4,9 +4,9 @@ test("a member creates a token in Ajustes, sees it once, uses it from a script a
   page,
   playwright,
   baseURL,
-  bitacora,
+  tasks,
 }) => {
-  await bitacora.open();
+  await tasks.open();
   await chooseFromMenu(page, "Ajustes");
   const settings = page.getByRole("dialog", { name: "Ajustes" });
   await settings.getByLabel("Nombre del token").fill("cicat");
@@ -14,7 +14,7 @@ test("a member creates a token in Ajustes, sees it once, uses it from a script a
 
   const shown = settings.getByLabel("Token nuevo");
   const token = await shown.inputValue();
-  expect(token).toMatch(/^bit_[\w-]{43}$/);
+  expect(token).toMatch(/^tasks_[\w-]{43}$/);
   const tokens = settings.getByRole("list", { name: "Tokens" });
   await expect(tokens.getByRole("listitem")).toContainText(["cicat"]);
   await expect(tokens).toContainText("Sin usar");
@@ -27,7 +27,7 @@ test("a member creates a token in Ajustes, sees it once, uses it from a script a
     data: { title: "Desde un script", list: "hecho" },
   });
   expect(created.status()).toBe(201);
-  expect((await bitacora.board()).cards.map((card) => card.title)).toEqual(["Desde un script"]);
+  expect((await tasks.board()).cards.map((card) => card.title)).toEqual(["Desde un script"]);
 
   await page.keyboard.press("Escape");
   await chooseFromMenu(page, "Ajustes");

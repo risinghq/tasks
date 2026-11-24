@@ -2,7 +2,7 @@ import { parseArgs } from "node:util";
 import { LISTS, type ApiCard } from "../src/shared/model";
 
 const USAGE = `Usage: bun run log -- "<title>" --list <${LISTS.join("|")}> [--label <name>] [--notes <text>] [--requester <name>] [--date <YYYY-MM-DD>]
-Reads BITACORA_URL and BITACORA_TOKEN from the environment.`;
+Reads TASKS_URL and TASKS_TOKEN from the environment.`;
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
@@ -16,8 +16,8 @@ const { values, positionals } = parseArgs({
 });
 
 const [title, ...extra] = positionals;
-const url = process.env.BITACORA_URL;
-const token = process.env.BITACORA_TOKEN;
+const url = process.env.TASKS_URL;
+const token = process.env.TASKS_TOKEN;
 if (!title || extra.length > 0 || !values.list || !url || !token) {
   console.error(USAGE);
   process.exit(2);

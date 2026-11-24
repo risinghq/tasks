@@ -1,4 +1,4 @@
-# bitacora
+# tasks
 
 A work log for a small team. Each person keeps a Trello-style board of their
 own, with four lists (Pendiente, Esta semana, En curso, Hecho) where finished
@@ -17,8 +17,8 @@ bun run dev
 
 `bun run dev` creates `.dev.vars` from `.dev.vars.example` on the first run,
 applies the migrations to the local D1 database and serves the app at
-<http://localhost:5173>. Sign in with `dev@bitacora.test` and the password
-`bitacora-dev`.
+<http://localhost:5173>. Sign in with `dev@tasks.test` and the password
+`tasks-dev`.
 
 ## Use it
 
@@ -77,8 +77,8 @@ A script sends the token as `Authorization: Bearer <token>`. Only `/api/v1`
 accepts it, and `/api/v1` accepts nothing else. Everything is JSON.
 
 ```sh
-export BITACORA_URL=https://bitacora.<subdomain>.workers.dev
-export BITACORA_TOKEN=bit_...
+export TASKS_URL=https://tasks.<subdomain>.workers.dev
+export TASKS_TOKEN=tasks_...
 bun run log -- "Informe de enero" --list hecho --label cicat
 ```
 
@@ -106,9 +106,9 @@ that address 429 with `Retry-After` for 15 minutes. A valid token still works.
 Admins see a Miembros section in Ajustes.
 
 - "Invitar" makes a single-use link for a role, `/invitacion/<token>`, that
-  lasts 7 days. Copy it and send it yourself, because bitacora sends no email.
-  The person opens it, enters a name, an email and a password, and lands signed
-  in on their own empty board.
+  lasts 7 days. Copy it and send it yourself, because tasks sends no email. The
+  person opens it, enters a name, an email and a password, and lands signed in
+  on their own empty board.
 - Each member has "Enlace para restablecer contraseña", a single-use link of 7
   days that sets a new password and signs out their other browsers.
 - "Desactivar" signs a member out at once and refuses their login until
@@ -149,7 +149,7 @@ bun run import:trello export.json --apply remote  # write it to the deployed D1
 The cards go to the first admin. `--email <email>` sends them to the account
 with that email, which must exist.
 
-| Trello list     | bitacora    |
+| Trello list     | tasks       |
 | --------------- | ----------- |
 | Trabajando, Hoy | En curso    |
 | Esta semana     | Esta semana |

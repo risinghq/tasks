@@ -30,7 +30,7 @@ if (!values.apply) {
   process.exit(0);
 }
 
-const file = join(mkdtempSync(join(tmpdir(), "bitacora-import-")), "import.sql");
+const file = join(mkdtempSync(join(tmpdir(), "tasks-import-")), "import.sql");
 writeFileSync(file, sql);
 const run = spawnSync(
   "bunx",
@@ -39,7 +39,7 @@ const run = spawnSync(
     "d1",
     "execute",
     "DB",
-    ...targetArgs({ remote: values.apply === "remote", state: process.env.BITACORA_STATE }),
+    ...targetArgs({ remote: values.apply === "remote", state: process.env.TASKS_STATE }),
     "--file",
     file,
   ],

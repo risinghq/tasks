@@ -41,7 +41,7 @@ export function send(path: string, init: Init = {}): Promise<Response> {
         ? JSON.stringify(init.json)
         : undefined;
   return exports.default.fetch(
-    new Request(`https://bitacora.test${path}`, {
+    new Request(`https://tasks.test${path}`, {
       method: init.method ?? "GET",
       headers,
       body,

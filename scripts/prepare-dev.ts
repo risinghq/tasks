@@ -10,7 +10,7 @@ if (!existsSync(".dev.vars")) {
   console.log("Created .dev.vars from .dev.vars.example.");
 }
 
-const state = process.env.BITACORA_STATE ?? ".wrangler/state";
+const state = process.env.TASKS_STATE ?? ".wrangler/state";
 const migrate = spawnSync(
   "bunx",
   ["wrangler", "d1", "migrations", "apply", "DB", "--local", "--persist-to", state],

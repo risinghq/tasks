@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-const KEY = "bitacora.hecho-open";
+const KEY = "tasks.hecho-open";
 
 function read(): Record<string, boolean> {
   try {
