@@ -93,6 +93,32 @@ test.describe("drag and drop", () => {
 });
 
 test.describe("card back", () => {
+  test("the title shows at full height and focus lands on the card, not delete", async ({ page, tasks }) => {
+    await tasks.seed([{ title: "Rediseño web", list: "en_curso" }]);
+    await tasks.open();
+    await tasks.card("Rediseño web").click();
+
+    const title = field(page);
+    await expect(title).toBeVisible();
+    const selector = "dialog [aria-label='Título de la tarjeta']";
+    const line: number = await page.evaluate(
+      `parseFloat(getComputedStyle(document.querySelector("${selector}")).lineHeight)`,
+    );
+    await expect
+      .poll(() => page.evaluate(`document.querySelector("${selector}").offsetHeight`))
+      .toBeGreaterThan(line);
+
+    await expect(dialog(page).getByRole("button", { name: "Eliminar" })).not.toBeFocused();
+    await expect
+      .poll(() =>
+        page.evaluate(`(() => {
+          const el = document.activeElement;
+          return el instanceof HTMLDialogElement || el?.getAttribute("aria-label") === "Título de la tarjeta";
+        })()`),
+      )
+      .toBe(true);
+  });
+
   test("Enter saves the title", async ({ page, tasks }) => {
     await tasks.seed([{ title: "Viejo", list: "en_curso" }]);
     await tasks.open();
