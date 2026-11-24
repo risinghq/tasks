@@ -35,7 +35,7 @@ export function NewWorkspaceDialog(props: { onClose: () => void }) {
             placeholder="Por ejemplo, Empresa A"
             maxLength={WORKSPACE_NAME_MAX}
             required
-            autoFocus
+            data-autofocus
             value={name}
             onChange={(event) => setName(event.target.value)}
           />

@@ -11,7 +11,12 @@ export function useModal() {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const dialog = ref.current;
-    if (dialog && !dialog.open) dialog.showModal();
+    if (!dialog || dialog.open) return;
+    dialog.showModal();
+    // showModal focuses the first control in the dialog, which can be a
+    // destructive action. The marked element takes focus instead, or the
+    // dialog itself when nothing is marked.
+    (dialog.querySelector<HTMLElement>("[data-autofocus]") ?? dialog).focus();
   }, []);
   const close = () => ref.current?.close();
   useEscape(close);
