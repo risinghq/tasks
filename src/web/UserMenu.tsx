@@ -1,5 +1,6 @@
-import { Check, ChevronDown, CircleUser, Keyboard, LogOut, Settings } from "lucide-react";
+import { Check, ChevronDown, CircleUser, Keyboard, LogOut, Plus, Settings } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import type { Workspace } from "../shared/model";
 import styles from "./UserMenu.module.css";
 import { readTheme, saveTheme, THEME_TITLES, THEMES, type Theme } from "./theme";
 import { useEscape } from "./useEscape";
@@ -14,7 +15,15 @@ function onKeyDown(event: React.KeyboardEvent) {
   items[(at + step + items.length) % items.length]?.focus();
 }
 
-export function UserMenu(props: { name: string | null; onSettings: () => void; onShortcuts: () => void }) {
+export function UserMenu(props: {
+  name: string | null;
+  workspaces: Workspace[];
+  currentId: string | null;
+  onSwitch: (id: string) => void;
+  onNewWorkspace: () => void;
+  onSettings: () => void;
+  onShortcuts: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const [theme, setTheme] = useState<Theme>(readTheme);
   const root = useRef<HTMLDivElement>(null);
@@ -62,6 +71,36 @@ export function UserMenu(props: { name: string | null; onSettings: () => void; o
           data-elevation="overlay"
           onKeyDown={onKeyDown}
         >
+          <div role="group" aria-labelledby="workspace-menu-heading">
+            <p id="workspace-menu-heading" className={styles.heading}>
+              Espacio
+            </p>
+            {props.workspaces.map((workspace) => (
+              <button
+                key={workspace.id}
+                type="button"
+                role="menuitemradio"
+                aria-checked={workspace.id === props.currentId}
+                className={styles.item}
+                onClick={choose(() => workspace.id !== props.currentId && props.onSwitch(workspace.id))}
+              >
+                {workspace.id === props.currentId ? (
+                  <Check size={16} aria-hidden />
+                ) : (
+                  <span className={styles.blank} />
+                )}
+                {workspace.name}
+              </button>
+            ))}
+            <button
+              type="button"
+              role="menuitem"
+              className={styles.item}
+              onClick={choose(props.onNewWorkspace)}
+            >
+              <Plus size={16} aria-hidden /> Espacio nuevo
+            </button>
+          </div>
           <button type="button" role="menuitem" className={styles.item} onClick={choose(props.onSettings)}>
             <Settings size={16} aria-hidden /> Ajustes
           </button>

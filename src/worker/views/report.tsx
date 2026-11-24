@@ -2,41 +2,7 @@
 import { addWeeks, dayHeading, weekRangeLabel } from "../../shared/dates";
 import { labelStyle, type Card, type Label } from "../../shared/model";
 import { Document } from "./layout";
-
-const REPORT_CSS = `
-body { background: var(--card); }
-main { max-width: var(--reading-width); margin: 0 auto; padding: var(--space-8) var(--space-4) var(--space-12); }
-@media (min-width: 48rem) { main { padding-inline: var(--space-6); } }
-header h1 { font-size: var(--text-title); line-height: var(--leading-tight); font-weight: var(--weight-strong); }
-.owner { color: var(--text-muted); }
-.counts { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-4); padding: 0; list-style: none; }
-.counts li { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius-full); background: var(--chip); font-weight: var(--weight-strong);
-  font-variant-numeric: tabular-nums; }
-.swatch { width: var(--space-3); height: var(--space-3); border-radius: var(--radius-sm); }
-nav { display: flex; justify-content: space-between; margin-top: var(--space-4); }
-nav a { display: inline-flex; align-items: center; min-height: var(--control); color: var(--text-accent);
-  font-weight: var(--weight-strong); text-decoration: none; }
-@media (hover: hover) and (pointer: fine) { nav a:hover { text-decoration: underline; } }
-section { margin-top: var(--space-8); }
-h2 { margin-bottom: var(--space-2); font-size: var(--text-base); line-height: var(--leading); font-weight: var(--weight-strong); }
-h2::first-letter { text-transform: uppercase; }
-article { padding: var(--space-2) 0 var(--space-2) var(--space-3); border-left: var(--space-1) solid;
-  break-inside: avoid; margin-bottom: var(--space-2); }
-article h3 { font-size: var(--text-sm); font-weight: var(--weight-strong); }
-.meta { color: var(--text-muted); font-size: var(--text-xs); line-height: var(--leading); }
-.description { margin-top: var(--space-1); white-space: pre-wrap; }
-.empty { color: var(--text-muted); }
-@page { size: A4; margin: 16mm; }
-@media print {
-  :root { color-scheme: light; }
-  main { max-width: none; padding: 0; }
-  nav { display: none; }
-  a { color: inherit; text-decoration: none; }
-  .counts li { border: 1px solid var(--border-control); background: none; }
-  section { margin-top: var(--space-6); }
-}
-`;
+import css from "./report.css?raw";
 
 const NO_LABEL_BORDER = "var(--border-control)";
 
@@ -56,7 +22,7 @@ export type ReportData = {
   token: string;
   week: string;
   currentWeek: string;
-  ownerName: string;
+  workspaceName: string;
   today: string;
   days: { date: string; cards: Card[] }[];
   active: Card[] | null;
@@ -86,11 +52,11 @@ export function ReportPage(props: ReportData) {
   const labelOf = (card: Card) => labels.find((label) => label.id === card.labelId);
 
   return (
-    <Document title={`Informe ${weekRangeLabel(week)}`} css={REPORT_CSS}>
+    <Document title={`Informe ${weekRangeLabel(week)}`} css={css}>
       <main>
         <header>
           <h1>{weekRangeLabel(week)}</h1>
-          <p class="owner">{props.ownerName}</p>
+          <p class="owner">{props.workspaceName}</p>
           <ul class="counts">
             {countsByLabel(finished, labels).map((entry) => (
               <li key={entry.key}>

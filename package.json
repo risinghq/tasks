@@ -11,7 +11,6 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
-    "claim-admin": "bun scripts/claim-admin.ts",
     "log": "bun scripts/log.ts",
     "import:trello": "bun scripts/import-trello.ts",
     "types": "wrangler types --strict-vars false",

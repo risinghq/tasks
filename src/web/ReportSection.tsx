@@ -1,14 +1,17 @@
 import { ExternalLink, RefreshCw } from "lucide-react";
 import { useState } from "react";
-import type { Settings } from "../shared/model";
+import type { WorkspaceSettings } from "../shared/model";
 import { api } from "./api";
 import { CopyLink } from "./CopyLink";
 import form from "./form.module.css";
 import styles from "./SettingsDialog.module.css";
 
-export function ReportSection(props: { settings: Settings; onChange: (settings: Settings) => void }) {
+export function ReportSection(props: {
+  workspace: WorkspaceSettings;
+  onChange: (workspace: WorkspaceSettings) => void;
+}) {
   const [confirming, setConfirming] = useState(false);
-  const link = `${location.origin}/r/${props.settings.reportToken}`;
+  const link = `${location.origin}/r/${props.workspace.reportToken}`;
 
   async function regenerate() {
     props.onChange(await api.regenerateToken());
@@ -28,7 +31,7 @@ export function ReportSection(props: { settings: Settings; onChange: (settings: 
           <ExternalLink size={16} aria-hidden /> Abrir informe
         </a>
         <span className={form.spacer} />
-        {!confirming && (
+        {!confirming && props.workspace.role === "owner" && (
           <button type="button" className={form.danger} onClick={() => setConfirming(true)}>
             <RefreshCw size={16} aria-hidden /> Generar enlace nuevo
           </button>

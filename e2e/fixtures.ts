@@ -1,7 +1,7 @@
 import { expect, test as base, type Locator, type Page } from "@playwright/test";
 import type { Board, Card, DoneWeek, Label, LabelColor, ListId } from "../src/shared/model";
 import { readFileSync } from "node:fs";
-import { FIRST_ADMIN_ID } from "../src/worker/db/first-admin";
+import { DEV_ACCOUNT } from "../scripts/dev-account";
 import { SESSION_COOKIE, sessionCookieValue } from "../src/worker/session-cookie";
 
 const sessionSecret = () => /^SESSION_SECRET=(.+)$/m.exec(readFileSync(".dev.vars", "utf8"))![1]!;
@@ -47,7 +47,7 @@ async function allCards(page: Page): Promise<Card[]> {
 
 export const test = base.extend<{ tasks: Tasks }>({
   tasks: async ({ page }, use) => {
-    await signInAs(page, FIRST_ADMIN_ID);
+    await signInAs(page, DEV_ACCOUNT.id);
     for (const card of await allCards(page)) await page.request.delete(`/api/cards/${card.id}`);
     for (const label of ((await (await page.request.get("/api/board")).json()) as Board).labels) {
       await page.request.delete(`/api/labels/${label.id}`);

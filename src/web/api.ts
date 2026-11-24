@@ -6,11 +6,14 @@ import type {
   IssuedToken,
   Label,
   ListId,
+  Me,
   Member,
-  Role,
-  Settings,
+  Workspace,
+  WorkspaceRole,
+  WorkspaceSettings,
 } from "../shared/model";
 import type { CreateLabel, UpdateCard, UpdateLabel } from "../shared/schemas";
+import { chooseWorkspace, storedWorkspace } from "./workspace";
 
 export class ApiError extends Error {
   constructor(
@@ -22,15 +25,24 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, method = "GET", json?: unknown): Promise<T> {
-  const init: RequestInit = { method };
+  const headers: Record<string, string> = {};
+  const workspace = storedWorkspace();
+  if (workspace) headers["X-Workspace"] = workspace;
+  const init: RequestInit = { method, headers };
   if (json !== undefined) {
-    init.headers = { "Content-Type": "application/json" };
+    headers["Content-Type"] = "application/json";
     init.body = JSON.stringify(json);
   }
   const res = await fetch(path, init);
   if (res.status === 401) {
     location.assign("/login");
     throw new Error("Sesión vencida");
+  }
+  if (res.status === 403 && workspace) {
+    // The user left or lost that workspace. Fall back to the personal one.
+    chooseWorkspace(null);
+    location.reload();
+    throw new ApiError("Sin acceso al espacio", 403);
   }
   if (!res.ok) throw new ApiError(`${method} ${path}: ${res.status}`, res.status);
   return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
@@ -50,20 +62,29 @@ export const api = {
   createLabel: (label: CreateLabel) => request<Label>("/api/labels", "POST", label),
   updateLabel: (id: string, patch: UpdateLabel) => request<Label>(`/api/labels/${id}`, "PATCH", patch),
   removeLabel: (id: string) => request<void>(`/api/labels/${id}`, "DELETE"),
-  settings: () => request<Settings>("/api/settings"),
-  rename: (name: string) => request<Settings>("/api/settings", "PATCH", { name }),
-  regenerateToken: () => request<Settings>("/api/settings/report-token", "POST"),
+  me: () => request<Me>("/api/me"),
+  rename: (name: string) => request<Me>("/api/me", "PATCH", { name }),
+  createWorkspace: (name: string) => request<Workspace>("/api/workspaces", "POST", { name }),
+  workspace: () => request<WorkspaceSettings>("/api/workspace"),
+  renameWorkspace: (name: string) => request<WorkspaceSettings>("/api/workspace", "PATCH", { name }),
+  deleteWorkspace: () => request<void>("/api/workspace", "DELETE"),
+  regenerateToken: () => request<WorkspaceSettings>("/api/workspace/report-token", "POST"),
   tokens: () => request<ApiToken[]>("/api/tokens"),
   createToken: (name: string) => request<IssuedToken>("/api/tokens", "POST", { name }),
   revokeToken: (id: string) => request<void>(`/api/tokens/${id}`, "DELETE"),
   members: () => request<Member[]>("/api/members"),
-  addMember: (member: { email: string; name?: string; role: Role }) =>
+  addMember: (member: { email: string; role: WorkspaceRole }) =>
     request<Member>("/api/members", "POST", member),
-  updateMember: (id: string, patch: { role?: Role; disabled?: boolean }) =>
-    request<Member>(`/api/members/${id}`, "PATCH", patch),
+  updateMember: (id: string, role: WorkspaceRole) => request<Member>(`/api/members/${id}`, "PATCH", { role }),
+  removeMember: (id: string) => request<void>(`/api/members/${id}`, "DELETE"),
 };
 
 /** Sends a delete that the browser finishes even after the page is gone. */
 export function removeOnExit(id: string): void {
-  void fetch(`/api/cards/${id}`, { method: "DELETE", keepalive: true });
+  const workspace = storedWorkspace();
+  void fetch(`/api/cards/${id}`, {
+    method: "DELETE",
+    keepalive: true,
+    headers: workspace ? { "X-Workspace": workspace } : {},
+  });
 }

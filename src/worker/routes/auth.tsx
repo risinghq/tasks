@@ -5,7 +5,8 @@ import { safeEqualText } from "../crypto";
 import { connect } from "../db/client";
 import { authorizeUrl, CALLBACK_PATH, identify, newHandshake } from "../google";
 import { endSession, sessionUser, startSession, type AppEnv } from "../session";
-import { findUserByEmail } from "../users";
+import { findOrCreateUser } from "../users";
+import { LandingPage } from "../views/landing";
 import { LoginPage } from "../views/login";
 
 export const auth = new Hono<AppEnv>();
@@ -14,6 +15,12 @@ const HANDSHAKE_COOKIE = "tasks_google";
 const HANDSHAKE_SECONDS = 10 * 60;
 
 const handshakeCookie = { httpOnly: true, secure: true, sameSite: "Lax", path: "/auth" } as const;
+
+/** Signed-in visitors fall through to the board. */
+auth.get("/", async (c, next) => {
+  if (await sessionUser(c)) return next();
+  return c.html(<LandingPage />);
+});
 
 auth.get("/login", async (c) => {
   if (await sessionUser(c)) return c.redirect("/");
@@ -41,11 +48,7 @@ auth.get(CALLBACK_PATH, async (c) => {
   const identity = await identify(c.env, new URL(c.req.url).origin, code, verifier);
   if (!identity) return c.html(<LoginPage error="Google no confirmó tu correo. Inténtalo de nuevo." />, 401);
 
-  const user = await findUserByEmail(connect(c.env), identity.email);
-  if (!user) {
-    return c.html(<LoginPage error={`${identity.email} no tiene acceso a Tareas.`} />, 403);
-  }
-  if (user.disabled) return c.html(<LoginPage error="Esta cuenta está desactivada." />, 403);
+  const user = await findOrCreateUser(connect(c.env), identity);
 
   await startSession(c, user.id, user.sessionVersion);
   return c.redirect("/", 303);

@@ -4,7 +4,7 @@ import { admin, member, send } from "./helpers";
 
 async function twoUsers() {
   const ana = await admin();
-  const beto = await member(ana);
+  const beto = await member();
   return { ana, beto };
 }
 

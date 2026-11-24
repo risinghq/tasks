@@ -72,22 +72,13 @@ Run these steps by hand once, before the first push to `master` can deploy.
    bunx wrangler secret put GOOGLE_CLIENT_SECRET
    ```
 
-5. Claim the first admin. The migration creates the account without an email, so
-   nobody can sign in until you do this. Use the email of the Google account
-   that will sign in:
-
-   ```sh
-   bun run claim-admin -- --remote --email you@example.com --name "Your Name"
-   ```
-
-   It works once. When the account already has an email it prints "The first
-   admin is already claimed. Nothing changed." and exits with 1. Without
-   `--remote` it claims the account in the local database.
-
 `workers_dev` is on, so the Worker answers at
 `https://tasks.<subdomain>.workers.dev`. Wrangler prints the address after the
-deploy. Sign in there with Google, then add the others from Ajustes. That
-address is the `TASKS_URL` of the script.
+deploy. Sign up there with Google. Each person gets a personal workspace, and
+owners add others from Ajustes. That address is the `TASKS_URL` of the script.
 
 Deploying over a database that already holds cards keeps them, and the report
-link, under the first admin. Run steps 3 to 5.
+link, in the personal workspace of the user with id
+`00000000-0000-4000-8000-000000000001`. Run steps 3 and 4. Before the first
+deploy of the workspace migration (`0005`), note the D1 time-travel bookmark the
+CI prints, so a bad migration can be undone.

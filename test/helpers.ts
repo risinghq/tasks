@@ -7,11 +7,12 @@ import type {
   IssuedToken,
   Label,
   LabelColor,
+  Me,
   Member,
-  Role,
-  Settings,
+  Workspace,
+  WorkspaceRole,
+  WorkspaceSettings,
 } from "../src/shared/model";
-import { claimAdminSql, FIRST_ADMIN_ID } from "../src/worker/db/first-admin";
 import { SESSION_COOKIE, sessionCookieValue } from "../src/worker/session-cookie";
 
 type Init = {
@@ -19,6 +20,7 @@ type Init = {
   json?: unknown;
   cookie?: string;
   bearer?: string;
+  workspace?: string;
   /** The client address Cloudflare reports. */
   address?: string;
   form?: Record<string, string>;
@@ -29,6 +31,7 @@ export function send(path: string, init: Init = {}): Promise<Response> {
   const headers = new Headers();
   if (init.cookie) headers.set("Cookie", init.cookie);
   if (init.bearer) headers.set("Authorization", `Bearer ${init.bearer}`);
+  if (init.workspace) headers.set("X-Workspace", init.workspace);
   if (init.address) headers.set("CF-Connecting-IP", init.address);
   if (init.json !== undefined) headers.set("Content-Type", "application/json");
   if (init.raw) headers.set("Content-Type", init.raw.type);
@@ -65,19 +68,22 @@ export async function signIn(userId: string, version = 0): Promise<string> {
   return `${SESSION_COOKIE}=${await sessionCookieValue(env.SESSION_SECRET, userId, version)}`;
 }
 
-/** A signed-in user. Every call carries their cookie. */
-export function clientFor(cookie: string) {
+/** A signed-in user. Every call carries their cookie, and the workspace when one is given. */
+export function clientFor(cookie: string, workspace?: string) {
   const call = async <T>(path: string, method = "GET", json?: unknown): Promise<T> => {
-    const res = await send(path, { method, json, cookie });
+    const res = await send(path, { method, json, cookie, workspace });
     if (!res.ok) throw new Error(`${method} ${path} -> ${res.status} ${await res.text()}`);
     return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
   };
   return {
     cookie,
+    workspace,
     call,
     /** The status of a call, for the ones that must fail. */
     status: async (path: string, method = "GET", json?: unknown) =>
-      (await send(path, { method, json, cookie })).status,
+      (await send(path, { method, json, cookie, workspace })).status,
+    /** The same user, working in another workspace. */
+    in: (id: string) => clientFor(cookie, id),
     board: () => call<Board>("/api/board"),
     add: (title: string, list: Card["list"]) => call<Card>("/api/cards", "POST", { title, list }),
     move: (id: string, move: { list: Card["list"]; index?: number; doneDate?: string }) =>
@@ -85,27 +91,49 @@ export function clientFor(cookie: string) {
     edit: (id: string, patch: Record<string, unknown>) => call<Card>(`/api/cards/${id}`, "PATCH", patch),
     addLabel: (name: string, color: LabelColor = "green") =>
       call<Label>("/api/labels", "POST", { name, color }),
-    settings: () => call<Settings>("/api/settings"),
+    me: () => call<Me>("/api/me"),
+    workspaceSettings: () => call<WorkspaceSettings>("/api/workspace"),
+    createWorkspace: (name: string) => call<Workspace>("/api/workspaces", "POST", { name }),
     tokens: () => call<ApiToken[]>("/api/tokens"),
     makeToken: (name: string) => call<IssuedToken>("/api/tokens", "POST", { name }),
     members: () => call<Member[]>("/api/members"),
-    addMember: (email: string, role: Role = "member", name?: string) =>
+    addMember: (email: string, role: WorkspaceRole = "member", name?: string) =>
       call<Member>("/api/members", "POST", { email, role, name }),
   };
 }
 
 export type Client = ReturnType<typeof clientFor>;
 
-/** Claims the first admin the way `bun run claim-admin` does and signs in. */
-export async function admin(): Promise<Client> {
-  await env.DB.exec(claimAdminSql(ADMIN));
-  return clientFor(await signIn(FIRST_ADMIN_ID));
+/** Makes the account a first Google sign-in makes (the user and their personal workspace) and signs in. */
+export async function signUp(person: { email: string; name: string }): Promise<Client> {
+  const id = crypto.randomUUID();
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO users (id, email, name) VALUES (?, ?, ?)").bind(
+      id,
+      person.email,
+      person.name,
+    ),
+    env.DB.prepare("INSERT INTO workspaces (id, name, created_at) VALUES (?, 'Personal', unixepoch())").bind(
+      id,
+    ),
+    env.DB.prepare("INSERT INTO workspace_members (workspace_id, user_id, role) VALUES (?, ?, 'owner')").bind(
+      id,
+      id,
+    ),
+  ]);
+  return clientFor(await signIn(id));
 }
 
-/** A member the admin added by email, signed in. */
-export async function member(adder: Client, who = MEMBER): Promise<Client> {
-  const added = await adder.addMember(who.email, "member", who.name);
-  return clientFor(await signIn(added.id));
+export const admin = (): Promise<Client> => signUp(ADMIN);
+
+/** A second, unrelated account with their own personal board. */
+export const member = (who = MEMBER): Promise<Client> => signUp(who);
+
+/** A person the owner added to their workspace, signed in and working in it. */
+export async function joined(owner: Client, role: WorkspaceRole = "member", who = MEMBER): Promise<Client> {
+  const added = await owner.addMember(who.email, role, who.name);
+  const workspace = owner.workspace ?? (await owner.me()).id;
+  return clientFor(await signIn(added.id), workspace);
 }
 
 export async function idOf(adder: Client, email: string): Promise<string> {

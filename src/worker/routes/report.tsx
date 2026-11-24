@@ -4,7 +4,7 @@ import { limaDate, parseWeek, weekDays, weekOf } from "../../shared/dates";
 import { cardsOf } from "../cards";
 import { connect } from "../db/client";
 import { labelsOf } from "../labels";
-import { userByReportToken } from "../users";
+import { workspaceByReportToken } from "../workspaces";
 import { ReportPage } from "../views/report";
 
 export const report = new Hono<{ Bindings: Env }>();
@@ -18,9 +18,9 @@ report.use(async (c, next) => {
 
 report.get("/:token", async (c) => {
   const db = connect(c.env);
-  const owner = await userByReportToken(db, c.req.param("token"));
-  if (!owner) return c.text("No encontrado", 404);
-  const cards = cardsOf(db, owner.id);
+  const workspace = await workspaceByReportToken(db, c.req.param("token"));
+  if (!workspace) return c.text("No encontrado", 404);
+  const cards = cardsOf(db, workspace.id);
 
   const today = limaDate(new Date());
   const currentWeek = weekOf(today);
@@ -38,11 +38,11 @@ report.get("/:token", async (c) => {
       token={c.req.param("token")}
       week={week}
       currentWeek={currentWeek}
-      ownerName={owner.name}
+      workspaceName={workspace.name}
       today={today}
       days={days}
       active={active}
-      labels={await labelsOf(db, owner.id).list()}
+      labels={await labelsOf(db, workspace.id).list()}
     />,
   );
 });

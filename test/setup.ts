@@ -1,13 +1,12 @@
 import { applyD1Migrations } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { afterEach, beforeAll, beforeEach, vi } from "vitest";
-import { FIRST_ADMIN_ID } from "../src/worker/db/first-admin";
 
 beforeAll(async () => {
   await applyD1Migrations(env.DB, env.MIGRATIONS);
 });
 
-/** Every test starts from the board a fresh deployment has: the unclaimed first admin and nothing else. */
+/** Every test starts from an empty database. Accounts are made by signing up. */
 beforeEach(async () => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date("2026-10-16T17:00:00Z"));
@@ -16,11 +15,9 @@ beforeEach(async () => {
     env.DB.prepare("DELETE FROM cards"),
     env.DB.prepare("DELETE FROM labels"),
     env.DB.prepare("DELETE FROM login_attempts"),
-    env.DB.prepare("DELETE FROM users WHERE id <> ?").bind(FIRST_ADMIN_ID),
-    env.DB.prepare(
-      `UPDATE users SET email = NULL, name = 'Propietario', role = 'admin',
-        session_version = 0, disabled = 0, report_token = lower(hex(randomblob(32))) WHERE id = ?`,
-    ).bind(FIRST_ADMIN_ID),
+    env.DB.prepare("DELETE FROM workspace_members"),
+    env.DB.prepare("DELETE FROM workspaces"),
+    env.DB.prepare("DELETE FROM users"),
   ]);
 });
 

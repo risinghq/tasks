@@ -1,15 +1,16 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { ROLE_TITLES, ROLES, type Member, type Role } from "../shared/model";
+import { ROLE_TITLES, WORKSPACE_ROLES, type Member, type WorkspaceRole } from "../shared/model";
 import { api, ApiError } from "./api";
 import form from "./form.module.css";
 import styles from "./SettingsDialog.module.css";
+import { chooseWorkspace } from "./workspace";
 
 function RoleSelect(props: {
   id: string;
   label: string;
-  value: Role;
+  value: WorkspaceRole;
   disabled?: boolean;
-  onChange: (role: Role) => void;
+  onChange: (role: WorkspaceRole) => void;
 }) {
   return (
     <select
@@ -18,9 +19,9 @@ function RoleSelect(props: {
       aria-label={props.label}
       value={props.value}
       disabled={props.disabled}
-      onChange={(event) => props.onChange(event.target.value as Role)}
+      onChange={(event) => props.onChange(event.target.value as WorkspaceRole)}
     >
-      {ROLES.map((role) => (
+      {WORKSPACE_ROLES.map((role) => (
         <option key={role} value={role}>
           {ROLE_TITLES[role]}
         </option>
@@ -31,7 +32,7 @@ function RoleSelect(props: {
 
 function AddMember(props: { onAdded: (member: Member) => void }) {
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<Role>("member");
+  const [role, setRole] = useState<WorkspaceRole>("member");
   const [error, setError] = useState<string | null>(null);
 
   async function add(event: FormEvent) {
@@ -44,7 +45,7 @@ function AddMember(props: { onAdded: (member: Member) => void }) {
       console.error(failure);
       setError(
         failure instanceof ApiError && failure.status === 409
-          ? "Ese correo ya tiene una cuenta."
+          ? "Ese correo ya está en este espacio."
           : "No se pudo añadir al miembro.",
       );
     }
@@ -78,47 +79,62 @@ function AddMember(props: { onAdded: (member: Member) => void }) {
   );
 }
 
-function Row(props: { member: Member; self: boolean; onChange: (member: Member) => void }) {
-  const { member } = props;
+function Row(props: {
+  member: Member;
+  self: boolean;
+  owner: boolean;
+  personal: boolean;
+  onChange: (member: Member) => void;
+  onRemoved: (member: Member) => void;
+}) {
+  const { member, self } = props;
   const [failed, setFailed] = useState(false);
 
-  async function update(patch: { role?: Role; disabled?: boolean }) {
+  async function run(action: () => Promise<void>) {
     setFailed(false);
     try {
-      props.onChange(await api.updateMember(member.id, patch));
+      await action();
     } catch (error) {
       console.error(error);
       setFailed(true);
     }
   }
 
+  const changeRole = (role: WorkspaceRole) =>
+    run(async () => props.onChange(await api.updateMember(member.id, role)));
+  const remove = () =>
+    run(async () => {
+      await api.removeMember(member.id);
+      if (self) {
+        chooseWorkspace(null);
+        location.reload();
+      } else props.onRemoved(member);
+    });
+
+  const canRemove = props.owner ? !self : self && !props.personal;
+
   return (
-    <li className={styles.member} data-disabled={member.disabled}>
+    <li className={styles.member}>
       <div className={styles.memberHead}>
         <div className={styles.who}>
           <strong>{member.name}</strong>
           <span className={styles.hint}>
-            {member.email ?? "Sin correo"}
-            {props.self && " · Tú"}
-            {member.disabled && " · Desactivado"}
+            {member.email}
+            {self && " · Tú"}
           </span>
         </div>
         <RoleSelect
           id={`role-${member.id}`}
           label={`Rol de ${member.name}`}
           value={member.role}
-          disabled={props.self}
-          onChange={(role) => update({ role })}
+          disabled={!props.owner || self}
+          onChange={changeRole}
         />
       </div>
-      {!props.self && (
+      {canRemove && (
         <div className={styles.memberActions}>
-          <button
-            type="button"
-            className={member.disabled ? form.secondary : form.danger}
-            onClick={() => update({ disabled: !member.disabled })}
-          >
-            {member.disabled ? "Activar" : "Desactivar"}
+          <button type="button" className={form.danger} onClick={remove}>
+            {self ? "Salir del espacio" : "Quitar"}
           </button>
         </div>
       )}
@@ -131,7 +147,7 @@ function Row(props: { member: Member; self: boolean; onChange: (member: Member) 
   );
 }
 
-export function MembersSection(props: { selfId: string }) {
+export function MembersSection(props: { selfId: string; owner: boolean; personal: boolean }) {
   const [members, setMembers] = useState<Member[] | null>(null);
 
   useEffect(() => {
@@ -141,16 +157,25 @@ export function MembersSection(props: { selfId: string }) {
   const replace = (next: Member) =>
     setMembers((all) => all?.map((member) => (member.id === next.id ? next : member)) ?? null);
   const append = (next: Member) => setMembers((all) => [...(all ?? []), next]);
+  const drop = (gone: Member) => setMembers((all) => all?.filter((member) => member.id !== gone.id) ?? null);
 
   return (
     <section className={styles.section} aria-labelledby="members-heading">
       <h3 id="members-heading" className={styles.heading}>
         Miembros
       </h3>
-      <AddMember onAdded={append} />
+      {props.owner && <AddMember onAdded={append} />}
       <ul className={styles.members} aria-label="Miembros">
         {members?.map((member) => (
-          <Row key={member.id} member={member} self={member.id === props.selfId} onChange={replace} />
+          <Row
+            key={member.id}
+            member={member}
+            self={member.id === props.selfId}
+            owner={props.owner}
+            personal={props.personal}
+            onChange={replace}
+            onRemoved={drop}
+          />
         ))}
       </ul>
     </section>
