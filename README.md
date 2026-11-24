@@ -17,7 +17,7 @@ bun run dev
 
 `bun run dev` creates `.dev.vars` from `.dev.vars.example` on the first run,
 applies the migrations to the local D1 database and serves the app at
-<http://localhost:5173>. The local admin is `dev@tasks.test`. Signing in with
+<http://localhost:5173>. The local account is `dev@tasks.test`. Signing in with
 Google needs a Google client in `.dev.vars` (see [Secrets](#secrets)); the tests
 sign in with a cookie signed by `SESSION_SECRET` instead.
 
@@ -103,14 +103,17 @@ that address 429 with `Retry-After` for 15 minutes. A valid token still works.
 
 ### Members
 
-Admins see a Miembros section in Ajustes.
+Anyone with a Google account signs up and gets a personal workspace. The user
+menu lists their workspaces. "Espacio nuevo" makes another, for a company or a
+project, with its own board, labels, members, tokens and report link.
 
-- "Añadir" takes the email of a Google account and a role. That person signs in
-  with Google and lands on their own empty board. tasks sends no email, so tell
-  them yourself.
-- "Desactivar" signs a member out at once and refuses their login until
-  "Activar". An admin cannot disable or demote themselves, so there is always
-  one.
+Owners see a Miembros section in Ajustes.
+
+- "Añadir" takes the email of a Google account and a role. That person finds the
+  workspace in their menu when they sign in. tasks sends no email, so tell them
+  yourself.
+- A member can leave with "Salir del espacio". An owner can remove or demote
+  anyone but the last owner.
 
 ## Secrets
 
@@ -145,8 +148,8 @@ bun run import:trello export.json --apply local   # write it to the local D1
 bun run import:trello export.json --apply remote  # write it to the deployed D1
 ```
 
-The cards go to the first admin. `--email <email>` sends them to the account
-with that email, which must exist.
+Name the target with `--email <email>` (that account's personal workspace, which
+must exist) or `--workspace <id>`. Give one of them.
 
 | Trello list     | tasks       |
 | --------------- | ----------- |

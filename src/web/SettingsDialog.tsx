@@ -1,22 +1,26 @@
-import type { Settings } from "../shared/model";
+import type { Me, WorkspaceSettings } from "../shared/model";
 import { AccountSection } from "./AccountSection";
 import { Dialog } from "./Dialog";
 import { MembersSection } from "./MembersSection";
 import { ReportSection } from "./ReportSection";
 import { TokensSection } from "./TokensSection";
+import { WorkspaceSection } from "./WorkspaceSection";
 
 export function SettingsDialog(props: {
-  settings: Settings;
-  onChange: (settings: Settings) => void;
+  me: Me;
+  workspace: WorkspaceSettings;
+  onMe: (me: Me) => void;
+  onWorkspace: (workspace: WorkspaceSettings) => void;
   onClose: () => void;
 }) {
-  const { settings, onChange } = props;
+  const { me, workspace } = props;
   return (
     <Dialog title="Ajustes" onClose={props.onClose} wide>
-      <AccountSection settings={settings} onChange={onChange} />
-      <ReportSection settings={settings} onChange={onChange} />
+      <AccountSection me={me} onChange={props.onMe} />
+      <WorkspaceSection me={me} workspace={workspace} onChange={props.onWorkspace} />
+      <ReportSection workspace={workspace} onChange={props.onWorkspace} />
       <TokensSection />
-      {settings.role === "admin" && <MembersSection selfId={settings.id} />}
+      <MembersSection selfId={me.id} owner={workspace.role === "owner"} personal={workspace.id === me.id} />
     </Dialog>
   );
 }

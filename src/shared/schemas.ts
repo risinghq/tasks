@@ -1,6 +1,14 @@
 import { z } from "zod";
 import { MIN_DATE, parseWeek } from "./dates";
-import { CHECKLIST_MAX, CHECKLIST_TEXT_MAX, LABEL_COLORS, LISTS, ROLES, TITLE_MAX } from "./model";
+import {
+  CHECKLIST_MAX,
+  CHECKLIST_TEXT_MAX,
+  LABEL_COLORS,
+  LISTS,
+  TITLE_MAX,
+  WORKSPACE_NAME_MAX,
+  WORKSPACE_ROLES,
+} from "./model";
 
 const title = z.string().trim().min(1).max(TITLE_MAX);
 const description = z.string().max(10_000);
@@ -79,13 +87,14 @@ export const updateLabelSchema = z.object({
 
 const userName = z.string().trim().min(1).max(80);
 const email = z.string().trim().toLowerCase().max(254).pipe(z.email());
-export const updateSettingsSchema = z.object({ name: userName });
+export const updateMeSchema = z.object({ name: userName });
 
-export const addMemberSchema = z.object({ email, name: userName.optional(), role: z.enum(ROLES) });
-export const updateMemberSchema = z.object({
-  role: z.enum(ROLES).optional(),
-  disabled: z.boolean().optional(),
-});
+const workspaceName = z.string().trim().min(1).max(WORKSPACE_NAME_MAX);
+export const createWorkspaceSchema = z.object({ name: workspaceName });
+export const updateWorkspaceSchema = z.object({ name: workspaceName });
+
+export const addMemberSchema = z.object({ email, name: userName.optional(), role: z.enum(WORKSPACE_ROLES) });
+export const updateMemberSchema = z.object({ role: z.enum(WORKSPACE_ROLES) });
 
 export type CreateCard = z.infer<typeof createCardSchema>;
 export type UpdateCard = z.infer<typeof updateCardSchema>;

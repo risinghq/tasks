@@ -18,7 +18,7 @@ export async function authorizeUrl(clientId: string, origin: string, handshake: 
     client_id: clientId,
     redirect_uri: origin + CALLBACK_PATH,
     response_type: "code",
-    scope: "openid email",
+    scope: "openid email profile",
     state: handshake.state,
     code_challenge: await sha256(handshake.verifier),
     code_challenge_method: "S256",
@@ -27,7 +27,8 @@ export async function authorizeUrl(clientId: string, origin: string, handshake: 
   return url.toString();
 }
 
-export type GoogleIdentity = { email: string };
+/** The verified email, and the display name Google holds for it, or the part before the @. */
+export type GoogleIdentity = { email: string; name: string };
 
 const claimsOf = (idToken: string): Record<string, unknown> | undefined => {
   try {
@@ -65,7 +66,7 @@ export async function identify(
   const { id_token } = (await res.json()) as { id_token?: string };
   const claims = id_token ? claimsOf(id_token) : undefined;
   if (!claims) return undefined;
-  const { aud, iss, exp, email, email_verified } = claims;
+  const { aud, iss, exp, email, email_verified, name } = claims;
   const valid =
     aud === env.GOOGLE_CLIENT_ID &&
     typeof iss === "string" &&
@@ -74,5 +75,8 @@ export async function identify(
     exp > Date.now() / 1000 &&
     (email_verified === true || email_verified === "true") &&
     typeof email === "string";
-  return valid ? { email: email.trim().toLowerCase() } : undefined;
+  if (!valid) return undefined;
+  const address = email.trim().toLowerCase();
+  const display = typeof name === "string" ? name.trim().slice(0, 80) : "";
+  return { email: address, name: display || address.split("@")[0]! };
 }

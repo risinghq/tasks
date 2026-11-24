@@ -1,10 +1,22 @@
 import { env } from "cloudflare:workers";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ADMIN, admin, clientFor, cookieOf, idOf, member, MEMBER, send, setNow, signIn } from "./helpers";
+import {
+  ADMIN,
+  admin,
+  clientFor,
+  cookieOf,
+  idOf,
+  joined,
+  member,
+  MEMBER,
+  send,
+  setNow,
+  signIn,
+} from "./helpers";
 
 const b64url = (value: unknown) => btoa(JSON.stringify(value)).replaceAll("+", "-").replaceAll("/", "_");
 
-type Claims = Partial<Record<"aud" | "iss" | "exp" | "email" | "email_verified", unknown>>;
+type Claims = Partial<Record<"aud" | "iss" | "exp" | "email" | "email_verified" | "name", unknown>>;
 
 /** Makes Google's token endpoint answer with an ID token carrying these claims. */
 function googleSays(claims: Claims, status = 200) {
@@ -37,6 +49,8 @@ async function callback(start: Awaited<ReturnType<typeof startGoogle>>, query: R
   return send(`/auth/google/callback?${params}`, { cookie: start.cookie });
 }
 
+const sessionOf = (res: Response) => res.headers.getSetCookie().find((c) => c.startsWith("tasks_session="));
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -49,8 +63,16 @@ describe("access", () => {
     ).toBe(401);
   });
 
-  it("sends page loads to the login page", async () => {
+  it("shows a signed-out visitor the landing page, with Google and no noindex", async () => {
     const res = await send("/");
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('href="/auth/google"');
+    expect(html).not.toContain("noindex");
+  });
+
+  it("sends other page loads to the login page", async () => {
+    const res = await send("/cards/abc");
     expect(res.status).toBe(302);
     expect(res.headers.get("Location")).toBe("/login");
   });
@@ -120,12 +142,13 @@ describe("signing in with Google", () => {
 
     expect(res.status).toBe(303);
     expect(res.headers.get("Location")).toBe("/");
-    const session = res.headers.getSetCookie().find((c) => c.startsWith("tasks_session="))!;
+    const session = sessionOf(res)!;
     expect(session).toMatch(/HttpOnly/i);
     expect(session).toMatch(/Secure/i);
     expect(session).toMatch(/SameSite=Lax/i);
-    expect(await clientFor(session.split(";")[0]!).settings()).toMatchObject({ email: ADMIN.email });
+    expect(await clientFor(session.split(";")[0]!).me()).toMatchObject({ email: ADMIN.email });
     expect(await me.status("/api/board")).toBe(200);
+    expect(await env.DB.prepare("SELECT count(*) AS n FROM users").first("n")).toBe(1);
 
     const sent = new URLSearchParams(fetched.mock.calls[0]![1]!.body as URLSearchParams);
     expect(sent.get("code")).toBe("codigo");
@@ -133,28 +156,33 @@ describe("signing in with Google", () => {
     expect(sent.get("client_secret")).toBe(env.GOOGLE_CLIENT_SECRET);
   });
 
-  it("refuses a Google account nobody added, and says which", async () => {
-    await admin();
-    googleSays({ email: "intruso@example.com" });
+  it("makes an account with a personal workspace for an email nobody added", async () => {
+    googleSays({ email: "Nueva@Example.com", name: "Nueva Persona" });
     const res = await callback(await startGoogle());
-    expect(res.status).toBe(403);
-    expect(await res.text()).toContain("intruso@example.com");
-    expect(res.headers.getSetCookie().some((c) => c.startsWith("tasks_session="))).toBe(false);
+    expect(res.status).toBe(303);
+
+    const me = clientFor(sessionOf(res)!.split(";")[0]!);
+    const profile = await me.me();
+    expect(profile).toMatchObject({ email: "nueva@example.com", name: "Nueva Persona" });
+    expect(profile.workspaces).toEqual([{ id: profile.id, name: "Personal", role: "owner" }]);
+    expect(await me.board()).toMatchObject({ cards: [], labels: [] });
   });
 
-  it("keeps the first admin out until it is claimed", async () => {
-    googleSays({ email: "" });
-    expect((await callback(await startGoogle())).status).toBe(403);
+  it("names the account after the email when Google sends no name", async () => {
+    googleSays({ email: "sin.nombre@example.com" });
+    const res = await callback(await startGoogle());
+    expect((await clientFor(sessionOf(res)!.split(";")[0]!).me()).name).toBe("sin.nombre");
   });
 
-  it("refuses a disabled account", async () => {
-    const me = await admin();
-    await member(me);
-    await me.call(`/api/members/${await idOf(me, MEMBER.email)}`, "PATCH", { disabled: true });
-    googleSays({ email: MEMBER.email });
-    const res = await callback(await startGoogle());
-    expect(res.status).toBe(403);
-    expect(res.headers.getSetCookie().some((c) => c.startsWith("tasks_session="))).toBe(false);
+  it("makes one account when two first sign-ins race", async () => {
+    googleSays({ email: "carrera@example.com" });
+    const [a, b] = await Promise.all([startGoogle(), startGoogle()]);
+    const results = await Promise.all([callback(a), callback(b)]);
+    expect(results.map((res) => res.status)).toEqual([303, 303]);
+    const count = await env.DB.prepare(
+      "SELECT count(*) AS n FROM users WHERE email = 'carrera@example.com'",
+    ).first("n");
+    expect(count).toBe(1);
   });
 
   it.each([
@@ -162,22 +190,20 @@ describe("signing in with Google", () => {
     ["another client's token", { aud: "otro-cliente" }],
     ["another issuer", { iss: "https://evil.example" }],
     ["an expired token", { exp: 1 }],
-  ])("refuses %s", async (_name, claims) => {
-    await admin();
+  ])("refuses %s, and makes no account", async (_name, claims) => {
     googleSays(claims);
     const res = await callback(await startGoogle());
     expect(res.status).toBe(401);
-    expect(res.headers.getSetCookie().some((c) => c.startsWith("tasks_session="))).toBe(false);
+    expect(sessionOf(res)).toBeUndefined();
+    expect(await env.DB.prepare("SELECT count(*) AS n FROM users").first("n")).toBe(0);
   });
 
   it("refuses when Google rejects the code", async () => {
-    await admin();
     googleSays({}, 400);
     expect((await callback(await startGoogle())).status).toBe(401);
   });
 
   it("refuses a callback with the wrong state, no code or no handshake cookie", async () => {
-    await admin();
     const fetched = googleSays({});
     const start = await startGoogle();
     expect((await callback(start, { state: "otro" })).status).toBe(400);
@@ -190,26 +216,17 @@ describe("signing in with Google", () => {
 });
 
 describe("sessions follow the user row", () => {
-  it("signs out a disabled user at once, and back in when enabled", async () => {
-    const me = await admin();
-    const beto = await member(me);
-    const id = await idOf(me, MEMBER.email);
-
-    await me.call(`/api/members/${id}`, "PATCH", { disabled: true });
-    expect(await beto.status("/api/board")).toBe(401);
-
-    await me.call(`/api/members/${id}`, "PATCH", { disabled: false });
-    expect(await beto.status("/api/board")).toBe(200);
-  });
-
   it("signs out a cookie whose session version is stale", async () => {
-    const me = await admin();
-    const beto = await member(me);
+    const beto = await member();
     await env.DB.prepare("UPDATE users SET session_version = session_version + 1 WHERE email = ?")
       .bind(MEMBER.email)
       .run();
     expect(await beto.status("/api/board")).toBe(401);
-    expect(await clientFor(await signIn(await idOf(me, MEMBER.email), 1)).status("/api/board")).toBe(200);
+    const row = await env.DB.prepare("SELECT id FROM users WHERE email = ?")
+      .bind(MEMBER.email)
+      .first<{ id: string }>();
+    const id = row!.id;
+    expect(await clientFor(await signIn(id, 1)).status("/api/board")).toBe(200);
   });
 
   it("rejects an expired cookie", async () => {
@@ -223,42 +240,117 @@ describe("sessions follow the user row", () => {
 describe("own account", () => {
   it("renames the user", async () => {
     const me = await admin();
-    expect(await me.call("/api/settings", "PATCH", { name: "Ana Nueva" })).toMatchObject({
-      name: "Ana Nueva",
+    expect(await me.call("/api/me", "PATCH", { name: "Ana Nueva" })).toMatchObject({ name: "Ana Nueva" });
+    expect((await me.me()).name).toBe("Ana Nueva");
+  });
+});
+
+describe("workspaces", () => {
+  it("starts with the personal one, and makes more that the user owns", async () => {
+    const me = await admin();
+    const company = await me.createWorkspace("Empresa A");
+    expect(company).toMatchObject({ name: "Empresa A", role: "owner" });
+    const names = (await me.me()).workspaces.map((w) => w.name);
+    expect(names).toEqual(["Personal", "Empresa A"]);
+  });
+
+  it("keeps each workspace's cards, labels and report apart", async () => {
+    const me = await admin();
+    const company = (await me.createWorkspace("Empresa A")).id;
+    await me.add("Personal", "en_curso");
+    await me.in(company).add("De la empresa", "en_curso");
+    await me.in(company).addLabel("Cliente");
+
+    expect((await me.board()).cards.map((c) => c.title)).toEqual(["Personal"]);
+    expect((await me.board()).labels).toEqual([]);
+    expect((await me.in(company).board()).cards.map((c) => c.title)).toEqual(["De la empresa"]);
+    const tokens = [await me.workspaceSettings(), await me.in(company).workspaceSettings()].map(
+      (w) => w.reportToken,
+    );
+    expect(new Set(tokens).size).toBe(2);
+  });
+
+  it("refuses a workspace the user does not belong to", async () => {
+    const ana = await admin();
+    const beto = await member();
+    const secret = (await ana.createWorkspace("Privada")).id;
+    expect(await beto.in(secret).status("/api/board")).toBe(403);
+    expect(await beto.in(secret).status("/api/cards", "POST", { title: "x", list: "pendiente" })).toBe(403);
+    expect(await beto.in("no-existe").status("/api/board")).toBe(403);
+  });
+
+  it("renames a workspace and deletes it with its cards", async () => {
+    const me = await admin();
+    const company = me.in((await me.createWorkspace("Empresa A")).id);
+    await company.add("Se va", "pendiente");
+    expect(await company.call("/api/workspace", "PATCH", { name: "Empresa B" })).toMatchObject({
+      name: "Empresa B",
     });
-    expect((await me.settings()).name).toBe("Ana Nueva");
+    expect(await company.status("/api/workspace", "DELETE")).toBe(204);
+    expect(await company.status("/api/board")).toBe(403);
+    expect(await env.DB.prepare("SELECT count(*) AS n FROM cards").first("n")).toBe(0);
+    expect((await me.me()).workspaces.map((w) => w.name)).toEqual(["Personal"]);
+  });
+
+  it("does not delete the personal workspace", async () => {
+    const me = await admin();
+    expect(await me.status("/api/workspace", "DELETE")).toBe(409);
+    expect(await me.status("/api/board")).toBe(200);
+  });
+
+  it("refuses an empty or very long name", async () => {
+    const me = await admin();
+    expect(await me.status("/api/workspaces", "POST", { name: "   " })).toBe(400);
+    expect(await me.status("/api/workspaces", "POST", { name: "x".repeat(61) })).toBe(400);
   });
 });
 
 describe("members", () => {
-  it("lists everyone to an admin", async () => {
+  it("lists everyone in the workspace to everyone in it", async () => {
     const me = await admin();
-    await member(me);
-    expect((await me.members()).map((m) => [m.email, m.role, m.disabled])).toEqual([
-      [ADMIN.email, "admin", false],
-      [MEMBER.email, "member", false],
-    ]);
+    const beto = await joined(me);
+    for (const who of [me, beto]) {
+      expect((await who.members()).map((m) => [m.email, m.role])).toEqual([
+        [ADMIN.email, "owner"],
+        [MEMBER.email, "member"],
+      ]);
+    }
   });
 
-  it("adds a member by email with a board of their own", async () => {
+  it("adds a person by email, who then sees the shared board and keeps their own", async () => {
     const me = await admin();
-    await me.add("Solo de Ana", "en_curso");
+    await me.add("Compartida", "en_curso");
     const added = await me.addMember("  Beto@Example.com ", "member");
-    expect(added).toMatchObject({ email: "beto@example.com", name: "beto", role: "member", disabled: false });
+    expect(added).toMatchObject({ email: "beto@example.com", name: "beto", role: "member" });
 
     const beto = clientFor(await signIn(added.id));
     expect(await beto.board()).toMatchObject({ cards: [], labels: [] });
-    expect(await beto.settings()).toMatchObject({ email: "beto@example.com", role: "member" });
+    expect((await beto.in((await me.me()).id).board()).cards.map((c) => c.title)).toEqual(["Compartida"]);
+    // Ana's personal board shows under her name, so the two are told apart.
+    expect((await beto.me()).workspaces.map((w) => w.name)).toEqual(["Personal", ADMIN.name]);
   });
 
-  it("gives the role the admin chose", async () => {
+  it("lets a person who was added sign in with Google and find the workspace", async () => {
     const me = await admin();
-    const other = clientFor(await signIn((await me.addMember("jefe@example.com", "admin")).id));
-    expect((await other.settings()).role).toBe("admin");
-    expect(await other.status("/api/members")).toBe(200);
+    await me.addMember(MEMBER.email, "member");
+    googleSays({ email: MEMBER.email, name: MEMBER.name });
+    const res = await callback(await startGoogle());
+    const profile = await clientFor(sessionOf(res)!.split(";")[0]!).me();
+    expect(profile.workspaces).toHaveLength(2);
+    expect(
+      await env.DB.prepare("SELECT count(*) AS n FROM users WHERE email = ?").bind(MEMBER.email).first("n"),
+    ).toBe(1);
   });
 
-  it("refuses an email that already has an account", async () => {
+  it("gives the role the owner chose", async () => {
+    const me = await admin();
+    const other = await joined(me, "owner", { email: "jefe@example.com", name: "Jefe" });
+    expect(await other.status("/api/members", "POST", { email: "otro@example.com", role: "member" })).toBe(
+      201,
+    );
+  });
+
+  it("refuses an email already in the workspace", async () => {
     const me = await admin();
     expect(
       await me.status("/api/members", "POST", { email: ADMIN.email.toUpperCase(), role: "member" }),
@@ -271,59 +363,77 @@ describe("members", () => {
     expect(await me.status("/api/members", "POST", { email: "no-es-un-correo", role: "member" })).toBe(400);
   });
 
-  it("keeps a member out of every Miembros route", async () => {
+  it("keeps a member from changing the workspace", async () => {
     const me = await admin();
-    const beto = await member(me);
+    const beto = await joined(me);
     const id = await idOf(me, ADMIN.email);
 
-    expect(await beto.status("/api/members")).toBe(403);
     expect(await beto.status("/api/members", "POST", { email: "otro@example.com", role: "member" })).toBe(
       403,
     );
-    expect(await beto.status(`/api/members/${id}`, "PATCH", { disabled: true })).toBe(403);
-    expect((await me.settings()).role).toBe("admin");
+    expect(await beto.status(`/api/members/${id}`, "PATCH", { role: "member" })).toBe(403);
+    expect(await beto.status(`/api/members/${id}`, "DELETE")).toBe(403);
+    expect(await beto.status("/api/workspace", "PATCH", { name: "Mía" })).toBe(403);
+    expect(await beto.status("/api/workspace", "DELETE")).toBe(403);
+    expect(await beto.status("/api/workspace/report-token", "POST")).toBe(403);
     expect(await me.members()).toHaveLength(2);
   });
 
   it("changes a member's role", async () => {
     const me = await admin();
-    const beto = await member(me);
+    const beto = await joined(me);
     const id = await idOf(me, MEMBER.email);
-    await me.call(`/api/members/${id}`, "PATCH", { role: "admin" });
-    expect(await beto.status("/api/members")).toBe(200);
+    await me.call(`/api/members/${id}`, "PATCH", { role: "owner" });
+    expect(await beto.status("/api/workspace", "PATCH", { name: "Equipo" })).toBe(200);
     await me.call(`/api/members/${id}`, "PATCH", { role: "member" });
-    expect(await beto.status("/api/members")).toBe(403);
+    expect(await beto.status("/api/workspace", "PATCH", { name: "Otro" })).toBe(403);
   });
 
-  it("does not let an admin disable or demote themselves", async () => {
+  it("does not demote or remove the last owner", async () => {
     const me = await admin();
     const id = await idOf(me, ADMIN.email);
-    expect(await me.status(`/api/members/${id}`, "PATCH", { disabled: true })).toBe(400);
-    expect(await me.status(`/api/members/${id}`, "PATCH", { role: "member" })).toBe(400);
+    expect(await me.status(`/api/members/${id}`, "PATCH", { role: "member" })).toBe(409);
+    expect(await me.status(`/api/members/${id}`, "DELETE")).toBe(409);
     expect(await me.status("/api/board")).toBe(200);
   });
 
-  it("keeps an admin when two admins remove each other at once", async () => {
+  it("lets a member leave, and takes their tokens for that workspace", async () => {
     const me = await admin();
-    const added = await me.addMember("jefe@example.com", "admin");
-    const other = clientFor(await signIn(added.id));
+    const beto = await joined(me);
+    const { id: tokenId } = await beto.makeToken("beto");
+    const id = await idOf(me, MEMBER.email);
+    expect(await beto.status(`/api/members/${id}`, "DELETE")).toBe(204);
+    expect(await beto.status("/api/board")).toBe(403);
+    expect(await me.members()).toHaveLength(1);
+    expect(
+      await env.DB.prepare("SELECT count(*) AS n FROM api_tokens WHERE id = ?").bind(tokenId).first("n"),
+    ).toBe(0);
+  });
+
+  it("keeps an owner when two owners remove each other at once", async () => {
+    const me = await admin();
+    const other = await joined(me, "owner", { email: "jefe@example.com", name: "Jefe" });
     const myId = await idOf(me, ADMIN.email);
+    const otherId = await idOf(me, "jefe@example.com");
 
     const results = await Promise.all([
-      me.status(`/api/members/${added.id}`, "PATCH", { disabled: true }),
-      other.status(`/api/members/${myId}`, "PATCH", { disabled: true }),
+      me.status(`/api/members/${otherId}`, "DELETE"),
+      other.status(`/api/members/${myId}`, "DELETE"),
     ]);
-    // The one that lands second is refused: by the guard, or because its admin is already disabled.
-    expect(results.filter((status) => status === 200)).toHaveLength(1);
-    expect(results.filter((status) => status === 409 || status === 401)).toHaveLength(1);
-    const admins = (await env.DB.prepare(
-      "SELECT count(*) AS n FROM users WHERE role = 'admin' AND disabled = 0",
-    ).first<{ n: number }>())!;
-    expect(admins.n).toBe(1);
+    // The one that lands second is refused: by the guard, or because its owner is already gone.
+    expect(results.filter((status) => status === 204)).toHaveLength(1);
+    expect(results.filter((status) => status === 409 || status === 403)).toHaveLength(1);
+    const owners = await env.DB.prepare(
+      "SELECT count(*) AS n FROM workspace_members WHERE workspace_id = ? AND role = 'owner'",
+    )
+      .bind((await me.me()).id)
+      .first("n");
+    expect(owners).toBe(1);
   });
 
   it("answers 404 for a member that does not exist", async () => {
     const me = await admin();
-    expect(await me.status("/api/members/nope", "PATCH", { disabled: true })).toBe(404);
+    expect(await me.status("/api/members/nope", "PATCH", { role: "member" })).toBe(404);
+    expect(await me.status("/api/members/nope", "DELETE")).toBe(404);
   });
 });

@@ -7,7 +7,7 @@ src/shared   model, schemas and date rules used by both sides
 src/worker   Hono app, D1 queries, auth
 src/web      React app: board, dialogs, drag and drop
 src/import   Trello export to cards
-scripts      claim-admin, import-trello, prepare-dev, log
+scripts      import-trello, prepare-dev, dev-account, log
 drizzle      generated migrations
 test         tests that drive the Worker over HTTP
 e2e          Playwright tests that drive the app in Chromium
@@ -17,13 +17,16 @@ e2e          Playwright tests that drive the app in Chromium
 
 `src/worker/index.ts` mounts, in this order:
 
-1. `/login`, `/auth/google`, `/auth/google/callback` and `/logout`
-   (`routes/auth.tsx`), public.
+1. `/` for a signed-out visitor (the landing page, `views/landing.tsx`),
+   `/login`, `/auth/google`, `/auth/google/callback` and `/logout`
+   (`routes/auth.tsx`), public. A signed-in visitor at `/` falls through to the
+   React app.
 2. `/api/v1/*` (`routes/v1.ts`), the JSON API for scripts. It takes a bearer
    token and no cookie. See API tokens.
-3. `/api/*` (`routes/api.ts`), the JSON API. It checks the session itself.
-   `/api/members` (`routes/members.ts`) also needs the admin role. `/api/tokens`
-   (`routes/tokens.ts`) manages the user's API tokens.
+3. `/api/*` (`routes/api.ts`), the JSON API. It checks the session itself and
+   picks the workspace (see Workspaces). `/api/members` (`routes/members.ts`)
+   lists and edits the workspace's members, and changing them needs the owner
+   role. `/api/tokens` (`routes/tokens.ts`) manages the user's API tokens.
 4. `/r/<token>` (`routes/report.tsx`), public.
 5. `/assets/*`, `/fonts/*` and `/favicon.svg`, public static files.
 6. Everything else needs the session and returns the React app, including a
@@ -32,33 +35,50 @@ e2e          Playwright tests that drive the app in Chromium
 Without a session, a page request redirects to `/login` and an API request gets
 401 (`session.ts`).
 
-## Users
+## Users and workspaces
 
-Each person has a row in `users`: id, email (unique, always lowercase), name,
-role (`admin` or `member`), session version, a disabled flag and the report
-token. Cards, labels and the report token belong to one user. The email is the
-Google account that signs in. An account with no email cannot sign in.
+Each person has a row in `users`: id, email (unique, always lowercase), name and
+session version. Sign-up is open to any Google account with a verified email.
+There are no global admins.
 
-The migration creates the first admin with the fixed id
-`00000000-0000-4000-8000-000000000001`, gives it every existing card, the report
-token and the two labels Desarrollo and Cursos, and leaves its email empty.
-`bun run claim-admin` sets it (see [deploy.md](deploy.md)). It runs one UPDATE
-that only applies while the email is empty, so a second run cannot take the
-account over.
+Cards, labels, API tokens and the report token belong to a workspace
+(`workspaces`), not to a user. `workspace_members` joins users to workspaces
+with the role `owner` or `member`. An owner renames or deletes the workspace,
+manages members and regenerates the report link. A member works on the cards and
+labels.
+
+A user's personal workspace has the user's own id and the name "Personal".
+Signing up for the first time creates both rows in one batch
+(`createPersonalWorkspace`). A person who wants to keep company A apart from
+company B makes one workspace for each (`POST /api/workspaces`) and is its
+owner.
+
+A request names its workspace in the `X-Workspace` header. Without it, the
+request uses the user's personal workspace. `requireWorkspace` answers 403 for a
+workspace the user does not belong to, the same as for one that does not exist.
+The web app keeps its choice in `localStorage` (`src/web/workspace.ts`) and
+sends it on every call. A member sees someone else's personal workspace under
+its owner's name.
+
+The migration `0005_workspaces.sql` gives every existing user a personal
+workspace and moves their cards, labels, tokens and report token into it. The
+fixed id `00000000-0000-4000-8000-000000000001` stays the first admin's id, so
+their data and API tokens keep working.
 
 ## Shared state
 
-A user can have two tabs open, and an admin changes other people's accounts. D1
+A user can have two tabs open, and owners change other people's membership. D1
 runs each statement, and each batch, as one unit. Every rule below rests on one
 statement or one batch, never on a read followed by a write.
 
 ### Card position
 
 A card's group is its list, plus the done date in Hecho. Positions are distinct
-and ordered inside a group of one user. Gaps are allowed, so only the order
-means anything. All writes are in `src/worker/cards.ts`. `cardsOf(db, userId)`
-returns the only functions that read or write cards, and each one adds the user
-to its statements, so a route cannot query without a user.
+and ordered inside a group of one workspace. Gaps are allowed, so only the order
+means anything. All writes are in `src/worker/cards.ts`.
+`cardsOf(db, workspaceId)` returns the only functions that read or write cards,
+and each one adds the workspace to its statements, so a route cannot query
+without one.
 
 | Write                          | What runs                                                                                                                                                                                                   |
 | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -76,10 +96,11 @@ it loads, so it shows the real order after the next load.
 
 ### Card id
 
-`cards.id` is the primary key of the whole table, so an id belongs to one user.
-A create inserts with `ON CONFLICT DO NOTHING`. When nothing was inserted, the
-card with that id is read for the same user. A repeat by its owner returns the
-stored card. An id that another user's card has gets 409.
+`cards.id` is the primary key of the whole table, so an id belongs to one
+workspace. A create inserts with `ON CONFLICT DO NOTHING`. When nothing was
+inserted, the card with that id is read for the same workspace. A repeat in its
+workspace returns the stored card. An id that another workspace's card has
+gets 409.
 
 Read, edit, move and delete look the card up by id and user. A card of another
 user answers 404, the same as a card that does not exist.
@@ -108,9 +129,9 @@ together, so a write never breaks the CHECK constraint.
 
 ### Labels
 
-A label belongs to one user and has a name and a color. The name is unique per
-user. The color is one of `green`, `yellow`, `orange`, `red`, `purple` and
-`blue`, stored by name. `labelStyle` in `src/shared/model.ts` gives each its
+A label belongs to one workspace and has a name and a color. The name is unique
+per workspace. The color is one of `green`, `yellow`, `orange`, `red`, `purple`
+and `blue`, stored by name. `labelStyle` in `src/shared/model.ts` gives each its
 background and text.
 
 A card has one label or none, in `cards.label_id`. A card with no label shows no
@@ -147,12 +168,13 @@ verifier. The scope is `openid email`.
 on a mismatch or a missing code), then `google.ts` trades the code, the client
 secret and the verifier at Google's token endpoint. The ID token comes straight
 from Google over TLS, so its signature is not checked. Its audience, issuer,
-expiry and `email_verified` are. A failure is 401. The email is then looked up
-in `users`: no account is 403 with the email shown, a disabled account is 403,
-otherwise `startSession` sets the cookie and the browser goes to `/`.
+expiry and `email_verified` are. A failure is 401. `findOrCreateUser` then looks
+the email up in `users` and creates the user and their personal workspace when
+there is none. `startSession` sets the cookie and the browser goes to `/`.
 
-Google proves who the person is. `users` decides who may enter, so an admin adds
-a member by email before that person signs in.
+Google proves who the person is. Membership decides what they see: an owner adds
+someone by email, and the person gets the shared workspace in their menu the
+next time they sign in.
 
 `login-limit.ts` counts failures by a key. A bad bearer token uses it under the
 key `bearer:<address>`, with the address from `CF-Connecting-IP`. See API
@@ -164,7 +186,8 @@ A user makes tokens in Ajustes (`/api/tokens`, session only). A token is
 `tasks_` and 32 random bytes in base64url. The table `api_tokens` holds its
 SHA-256, a name, the creation time and the last use, never the token. The token
 is in the response that creates it and nowhere else. Revoking deletes the row. A
-row belongs to one user, and deleting the user deletes their tokens.
+row belongs to one user and one workspace, and a token reads and writes only
+that workspace. Removing the member or deleting the workspace deletes the token.
 
 `/api/v1` runs `requireToken` (`api-tokens.ts`) and nothing from `session.ts`,
 so the cookie is not read there and a request without a bearer gets 401. The
@@ -173,14 +196,13 @@ cannot make tokens. A bearer request needs no CSRF step because the browser does
 not send it by itself.
 
 `requireToken` runs one UPDATE that sets `last_used_at` on the row whose hash
-matches and whose owner is not disabled, then reads the owner as
-`requireSession` does, so a disabled owner or an unclaimed account matches
-nothing. A token that matches nothing counts one attempt under the
+matches, then reads the owner and the workspace as `requireSession` and
+`requireWorkspace` do. A token that matches nothing counts one attempt under the
 `bearer:<address>` key. The sixth in a window is 429 with `Retry-After`. A token
 that matches does not touch the limit table, so a valid token still works from a
 locked address.
 
-`POST /api/v1/cards` resolves the label name to one of the user's labels
+`POST /api/v1/cards` resolves the label name to one of the workspace's labels
 (`routes/v1.ts`, 400 when there is none) and calls `cardsOf(...).create`, the
 same function the board uses. A Hecho card takes `date`, validated as a Done
 date, or today. `GET /api/v1/cards` reads through the same `cardsOf` functions
@@ -188,33 +210,37 @@ as the board: open cards, and the Hecho cards of `semana`.
 
 ### Members
 
-`/api/members` is for admins. A member gets 403.
+Any member reads the list (`GET /api/members`). Adding, changing a role and
+removing someone else need the owner role.
 
-An admin adds a member with an email and a role (`POST /api/members`). The name
-defaults to the part before the `@`. An email that already has an account is
-409, decided by the unique index, not by a prior read.
+An owner adds a member with an email and a role (`POST /api/members`). An email
+with no account gets a user and a personal workspace, so the person finds the
+shared workspace the first time they sign in. The name defaults to the part
+before the `@`. An email already in this workspace is 409, decided by the
+primary key of `workspace_members`, not by a prior read.
 
-An admin can change another user's role and disabled flag. They cannot disable
-or demote themselves (400). A change that would leave no other enabled admin
-gets 409; the guard is part of the UPDATE statement, so two admins cannot remove
-each other together.
+A member can remove themselves. An owner can remove or demote anyone. A change
+that would leave no other owner is 409; the guard is part of the same statement,
+so two owners cannot remove each other together. Removing a member deletes their
+API tokens for that workspace.
 
 ### Report token
 
-`users.report_token` holds one token of 32 random bytes per user. The column has
-a random default, so the token exists as soon as the row does and a read never
-writes. The migration copies the existing token to the first admin unchanged, so
-the link that exists keeps working.
+`workspaces.report_token` holds one token of 32 random bytes per workspace. The
+column has a random default, so the token exists as soon as the row does and a
+read never writes. The migration moves the existing token to the first admin's
+personal workspace unchanged, so the link that exists keeps working.
 
-| State   | Entered by                           | Left by             |
-| ------- | ------------------------------------ | ------------------- |
-| Current | The user's creation, or a regenerate | The next regenerate |
+| State   | Entered by                                | Left by             |
+| ------- | ----------------------------------------- | ------------------- |
+| Current | The workspace's creation, or a regenerate | The next regenerate |
 
-Only the signed-in user reads or regenerates their token (`/api/settings`).
-Anyone with the token reads that user's report: their name and their cards,
-never another user's. Regenerating is one UPDATE, so the old link stops at once.
-Two tabs regenerating together leave one token in the row, the later write, and
-the other tab shows a link that no longer works until it reloads the settings.
+Members read the token and only owners regenerate it (`/api/workspace`). Anyone
+with the token reads that workspace's report: its name and its cards, never
+another workspace's. A personal workspace reports under its owner's name.
+Regenerating is one UPDATE, so the old link stops at once. Two tabs regenerating
+together leave one token in the row, the later write, and the other tab shows a
+link that no longer works until it reloads the settings.
 
 The report sends `X-Robots-Tag: noindex, nofollow` and
 `Cache-Control: no-store`.

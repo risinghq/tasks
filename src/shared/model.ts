@@ -30,13 +30,16 @@ export const TITLE_MAX = 200;
 export const CHECKLIST_MAX = 100;
 export const CHECKLIST_TEXT_MAX = 200;
 
-export const ROLES = ["admin", "member"] as const;
-export type Role = (typeof ROLES)[number];
+/** An owner manages the workspace and its members. A member works on the board. */
+export const WORKSPACE_ROLES = ["owner", "member"] as const;
+export type WorkspaceRole = (typeof WORKSPACE_ROLES)[number];
 
-export const ROLE_TITLES: Record<Role, string> = {
-  admin: "Administrador",
+export const ROLE_TITLES: Record<WorkspaceRole, string> = {
+  owner: "Propietario",
   member: "Miembro",
 };
+
+export const WORKSPACE_NAME_MAX = 60;
 
 export type Label = { id: string; name: string; color: LabelColor };
 
@@ -71,22 +74,16 @@ export type DoneWeek = {
   olderWeek: string | null;
 };
 
-/** What Ajustes shows about the signed-in user. */
-export type Settings = {
-  id: string;
-  name: string;
-  email: string;
-  role: Role;
-  reportToken: string;
-};
+/** A workspace as its member sees it. */
+export type Workspace = { id: string; name: string; role: WorkspaceRole };
 
-export type Member = {
-  id: string;
-  name: string;
-  email: string | null;
-  role: Role;
-  disabled: boolean;
-};
+/** The signed-in user and every workspace they belong to, oldest first. The first is their default. */
+export type Me = { id: string; name: string; email: string; workspaces: Workspace[] };
+
+/** What Ajustes shows about the current workspace. */
+export type WorkspaceSettings = Workspace & { reportToken: string };
+
+export type Member = { id: string; name: string; email: string; role: WorkspaceRole };
 
 /** A personal API token as Ajustes lists it. Times are unix seconds. */
 export type ApiToken = { id: string; name: string; createdAt: number; lastUsedAt: number | null };

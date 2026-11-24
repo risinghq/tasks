@@ -9,10 +9,10 @@ type Placement = { list: ListId; doneDate: string | null };
 
 export class InvalidCard extends Error {}
 
-/** A create named an id that another user's card already has. */
+/** A create named an id that another workspace's card already has. */
 export class CardIdTaken extends Error {}
 
-/** The columns of a `Card`. `user_id` never leaves the module. */
+/** The columns of a `Card`. `workspace_id` never leaves the module. */
 const cardColumns = {
   id: cards.id,
   title: cards.title,
@@ -51,11 +51,11 @@ export type NewCard = CreateCard & Pick<UpdateCard, "description" | "labelId" | 
 
 /**
  * A group as a WHERE fragment on unqualified columns, valid in any subquery over
- * `cards`. It names the user, so a statement built from it cannot reach another
- * user's cards.
+ * `cards`. It names the workspace, so a statement built from it cannot reach
+ * another workspace's cards.
  */
-function groupWhere(userId: string, p: Placement): SQL {
-  const owner = sql`user_id = ${userId} and list = ${p.list}`;
+function groupWhere(workspaceId: string, p: Placement): SQL {
+  const owner = sql`workspace_id = ${workspaceId} and list = ${p.list}`;
   return p.list === "hecho" ? sql`${owner} and done_date = ${p.doneDate}` : owner;
 }
 
@@ -63,26 +63,26 @@ function groupWhere(userId: string, p: Placement): SQL {
  * Positions are computed inside the statement that writes them, so two requests
  * touching one group cannot read the same "last position".
  */
-const endOfGroup = (userId: string, p: Placement, except?: string): SQL =>
-  sql`(select coalesce(max(position), 0) + 1 from cards where ${groupWhere(userId, p)}${except ? sql` and id <> ${except}` : sql``})`;
+const endOfGroup = (workspaceId: string, p: Placement, except?: string): SQL =>
+  sql`(select coalesce(max(position), 0) + 1 from cards where ${groupWhere(workspaceId, p)}${except ? sql` and id <> ${except}` : sql``})`;
 
 /**
  * Rewrites a group's positions as 1..n in their current order. The ranks are
  * materialized first: ranking while rows change would read half-updated positions.
  */
-const renumber = (userId: string, p: Placement): SQL => sql`
+const renumber = (workspaceId: string, p: Placement): SQL => sql`
   with ranked as materialized (
-    select id, row_number() over (order by position, id) as rank from cards where ${groupWhere(userId, p)}
+    select id, row_number() over (order by position, id) as rank from cards where ${groupWhere(workspaceId, p)}
   )
-  update cards set position = (select rank from ranked where ranked.id = cards.id) where ${groupWhere(userId, p)}`;
+  update cards set position = (select rank from ranked where ranked.id = cards.id) where ${groupWhere(workspaceId, p)}`;
 
 /**
- * Every read and write of cards, for one user. The user id comes from the
- * session, and every statement here names it, so a route cannot reach another
- * user's cards.
+ * Every read and write of cards, for one workspace. The id comes from
+ * `requireWorkspace`, and every statement here names it, so a route cannot reach
+ * another workspace's cards.
  */
-export function cardsOf(db: Db, userId: string) {
-  const mine = eq(cards.userId, userId);
+export function cardsOf(db: Db, workspaceId: string) {
+  const mine = eq(cards.workspaceId, workspaceId);
 
   const get = async (id: string): Promise<Card | undefined> =>
     db
@@ -95,7 +95,7 @@ export function cardsOf(db: Db, userId: string) {
     const label = await db
       .select({ id: labels.id })
       .from(labels)
-      .where(and(eq(labels.id, labelId), eq(labels.userId, userId)))
+      .where(and(eq(labels.id, labelId), eq(labels.workspaceId, workspaceId)))
       .get();
     if (!label) throw new InvalidCard("unknown label");
   };
@@ -143,7 +143,7 @@ export function cardsOf(db: Db, userId: string) {
     /**
      * Creates a card at the end of its list. A card made in Hecho is dated
      * today unless a date is given. A repeated create with the same id returns
-     * the card the first one made. An id that another user's card has throws
+     * the card the first one made. An id that another workspace's card has throws
      * `CardIdTaken`.
      */
     async create(input: NewCard, today: string): Promise<Card> {
@@ -154,13 +154,13 @@ export function cardsOf(db: Db, userId: string) {
         .insert(cards)
         .values({
           id,
-          userId,
+          workspaceId,
           title: input.title,
           description: input.description,
           labelId: input.labelId,
           requester: input.requester,
           ...placement,
-          position: endOfGroup(userId, placement),
+          position: endOfGroup(workspaceId, placement),
         })
         .onConflictDoNothing()
         .returning(cardColumns)
@@ -196,16 +196,20 @@ export function cardsOf(db: Db, userId: string) {
       const before =
         index === undefined
           ? sql`null`
-          : sql`(select position from cards where ${groupWhere(userId, placement)} and id <> ${card.id} order by position, id limit 1 offset ${index}) - 0.5`;
+          : sql`(select position from cards where ${groupWhere(workspaceId, placement)} and id <> ${card.id} order by position, id limit 1 offset ${index}) - 0.5`;
       const own = db
         .update(cards)
         .set({
           ...fields,
           ...placement,
-          position: sql`coalesce(${before}, ${endOfGroup(userId, placement, card.id)})`,
+          position: sql`coalesce(${before}, ${endOfGroup(workspaceId, placement, card.id)})`,
         })
         .where(and(eq(cards.id, card.id), mine));
-      await batch(db, [own, renumber(userId, placement), ...(moved ? [renumber(userId, card)] : [])]);
+      await batch(db, [
+        own,
+        renumber(workspaceId, placement),
+        ...(moved ? [renumber(workspaceId, card)] : []),
+      ]);
       return (await get(card.id))!;
     },
 

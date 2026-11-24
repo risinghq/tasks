@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import type { ApiCard } from "../src/shared/model";
-import { admin, idOf, member, MEMBER, send, setNow } from "./helpers";
+import { admin, idOf, joined, member, MEMBER, send, setNow } from "./helpers";
 
 const post = (token: string, json: unknown, address?: string) =>
   send("/api/v1/cards", { method: "POST", json, bearer: token, address });
@@ -126,7 +126,7 @@ describe("POST /api/v1/cards", () => {
 
   it("works on the token owner's board only", async () => {
     const { me, token } = await ana();
-    const beto = await member(me);
+    const beto = await member();
     const { token: betoToken } = await beto.makeToken("beto");
     await post(token, { title: "De Ana", list: "pendiente" });
     await post(betoToken, { title: "De Beto", list: "pendiente" });
@@ -184,7 +184,7 @@ describe("which routes take which credential", () => {
     expect(
       (await send("/api/tokens", { method: "POST", bearer: token, json: { name: "otro" } })).status,
     ).toBe(401);
-    expect((await send("/", { bearer: token })).status).toBe(302);
+    expect((await send("/cards/abc", { bearer: token })).status).toBe(302);
   });
 
   it("ignores the cookie when a bearer is sent", async () => {
@@ -214,7 +214,7 @@ describe("revoking", () => {
 
   it("belongs to the owner: another member cannot revoke it", async () => {
     const { me, token } = await ana();
-    const beto = await member(me);
+    const beto = await joined(me);
     const id = (await me.tokens())[0]!.id;
     expect(await beto.status(`/api/tokens/${id}`, "DELETE")).toBe(404);
     expect(await beto.tokens()).toEqual([]);
@@ -222,20 +222,28 @@ describe("revoking", () => {
   });
 });
 
-describe("a disabled owner", () => {
-  it("loses the token until the account is enabled again", async () => {
+describe("a removed member", () => {
+  it("loses the token for that workspace, and keeps the one for their own", async () => {
     const { me } = await ana();
-    const beto = await member(me);
+    const beto = await joined(me);
     const { token } = await beto.makeToken("beto");
+    const { token: own } = await beto.in((await beto.me()).id).makeToken("propio");
     expect((await get(token)).status).toBe(200);
 
     const id = await idOf(me, MEMBER.email);
-    await me.call(`/api/members/${id}`, "PATCH", { disabled: true });
+    await me.call(`/api/members/${id}`, "DELETE");
     expect((await get(token)).status).toBe(401);
     expect((await post(token, { title: "x", list: "pendiente" })).status).toBe(401);
+    expect((await get(own)).status).toBe(200);
+  });
 
-    await me.call(`/api/members/${id}`, "PATCH", { disabled: false });
-    expect((await get(token)).status).toBe(200);
+  it("works only in the workspace the token was made for", async () => {
+    const { me } = await ana();
+    const work = await me.createWorkspace("Empresa A");
+    const { token } = await me.in(work.id).makeToken("empresa");
+    await post(token, { title: "De la empresa", list: "pendiente" });
+    expect((await me.board()).cards).toEqual([]);
+    expect((await me.in(work.id).board()).cards.map((c) => c.title)).toEqual(["De la empresa"]);
   });
 });
 

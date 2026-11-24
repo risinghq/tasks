@@ -1,9 +1,22 @@
 import { applyD1Migrations } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
-import { admin, send, setNow } from "./helpers";
+import { ADMIN, clientFor, send, setNow, signIn } from "./helpers";
 
-const TABLES = ["api_tokens", "cards", "labels", "login_attempts", "users", "settings", "d1_migrations"];
+const FIRST_USER = "00000000-0000-4000-8000-000000000001";
+
+const TABLES = [
+  "api_tokens",
+  "cards",
+  "labels",
+  "login_attempts",
+  "links",
+  "workspace_members",
+  "workspaces",
+  "users",
+  "settings",
+  "d1_migrations",
+];
 
 async function dropEverything() {
   await env.DB.batch(TABLES.map((table) => env.DB.prepare(`DROP TABLE IF EXISTS ${table}`)));
@@ -48,13 +61,19 @@ describe("the accounts migration on a database with data", () => {
           .run();
       }
 
+      await applyD1Migrations(env.DB, env.MIGRATIONS.slice(0, 5));
+      await env.DB.prepare("UPDATE users SET email = ?, name = ? WHERE id = ?")
+        .bind(ADMIN.email, ADMIN.name, FIRST_USER)
+        .run();
       await applyD1Migrations(env.DB, env.MIGRATIONS);
 
-      // The account cannot sign in until it is claimed.
-      const unclaimed = await env.DB.prepare("SELECT email, role FROM users").all();
-      expect(unclaimed.results).toEqual([{ email: null, role: "admin" }]);
+      const me = clientFor(await signIn(FIRST_USER));
+      const membership = await env.DB.prepare(
+        "SELECT workspace_id, user_id, role FROM workspace_members",
+      ).all();
+      expect(membership.results).toEqual([{ workspace_id: FIRST_USER, user_id: FIRST_USER, role: "owner" }]);
+      expect((await me.me()).workspaces).toEqual([{ id: FIRST_USER, name: "Personal", role: "owner" }]);
 
-      const me = await admin();
       const { cards, labels } = await me.board();
       const labelName = (id: string | null) => labels.find((label) => label.id === id)?.name ?? null;
       expect(labels.map((label) => [label.name, label.color])).toEqual([
@@ -76,7 +95,7 @@ describe("the accounts migration on a database with data", () => {
       });
       expect(cards.find((card) => card.id === "c6")?.doneDate).toBe("2026-10-15");
 
-      expect((await me.settings()).reportToken).toBe(OLD_TOKEN);
+      expect((await me.workspaceSettings()).reportToken).toBe(OLD_TOKEN);
       const report = await send(`/r/${OLD_TOKEN}?semana=2026-W42`);
       expect(report.status).toBe(200);
       expect(await report.text()).toContain("Terminada sin etiqueta");

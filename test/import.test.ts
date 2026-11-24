@@ -2,11 +2,10 @@ import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { mapTrelloExport, ownerKeyOf, toSql, type Owner } from "../src/import/trello";
 import type { Card } from "../src/shared/model";
-import { FIRST_ADMIN_ID } from "../src/worker/db/first-admin";
 import fixture from "./fixtures/trello-export.json";
 import { admin, ADMIN, member } from "./helpers";
 
-async function importFixture(owner: Owner = { id: FIRST_ADMIN_ID }) {
+async function importFixture(owner: Owner = { email: ADMIN.email }) {
   const sql = toSql(await mapTrelloExport(fixture, ownerKeyOf(owner)), owner);
   for (const statement of sql.split("\n")) await env.DB.exec(statement);
   return sql;
@@ -77,6 +76,7 @@ describe("Trello import", () => {
   });
 
   it("adds nothing when the same file is imported again", async () => {
+    await admin();
     await importFixture();
     await importFixture();
     const cards = await env.DB.prepare("SELECT count(*) AS n FROM cards").first<{ n: number }>();
@@ -86,7 +86,7 @@ describe("Trello import", () => {
 
   it("imports into the account named by email, and into no one else's", async () => {
     const me = await admin();
-    const beto = await member(me);
+    const beto = await member();
     await importFixture({ email: "BETO@example.com" });
     expect((await beto.board()).cards).toHaveLength(7);
     expect((await me.board()).cards).toEqual([]);
@@ -94,7 +94,7 @@ describe("Trello import", () => {
 
   it("lets two users import the same export", async () => {
     const me = await admin();
-    const beto = await member(me);
+    const beto = await member();
     await importFixture({ email: ADMIN.email });
     await importFixture({ email: "beto@example.com" });
     expect((await me.board()).cards).toHaveLength(7);

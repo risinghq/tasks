@@ -1,10 +1,10 @@
 # Design
 
 `src/web/styles/tokens.css` holds the visual values of the app and of the server
-pages (login and the report). Colors, type, space, radius, shadow, layers and
-motion come from it. A component reads a role name such as `--text`, `--card` or
-`--accent`. It never reads a scale step (`--accent-9`) and never writes a color,
-a font, a shadow, a duration or a spacing value of its own.
+pages (landing, login and the report). Colors, type, space, radius, shadow,
+layers and motion come from it. A component reads a role name such as `--text`,
+`--card` or `--accent`. It never reads a scale step (`--accent-9`) and never
+writes a color, a font, a shadow, a duration or a spacing value of its own.
 
 A size that one component owns stays in that component's stylesheet, in rem: the
 height of a toast, the minimum height of the description field, the box of an
@@ -33,7 +33,16 @@ its own 12-step scale, not an inversion of the other.
 
 - A higher surface is lighter in dark: `--list` < `--card` < `--overlay`.
 - The board background is one token, `--board`, per theme.
-- Login and the report follow the system and never read a stored choice.
+- The landing, login and the report follow the system and never read a stored
+  choice.
+
+## Landing
+
+The landing page (`views/landing.tsx`) is one column of large copy in the style
+of the reboot site: Inter 600 headline, a mini board, a manifesto whose words
+light as the page scrolls, and the same Google button at the top and the end. It
+uses the tokens above and no value of its own. Reduced motion shows the words
+lit.
 
 ## Color
 

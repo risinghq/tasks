@@ -23,7 +23,7 @@ async function seeded() {
   await me.add("Trabajo en marcha", "en_curso");
   await me.add("Todavía pendiente", "pendiente");
   await me.add("Planeado para la semana", "esta_semana");
-  const { reportToken } = await me.settings();
+  const { reportToken } = await me.workspaceSettings();
   return { me, token: reportToken };
 }
 
@@ -105,8 +105,8 @@ describe("weekly report", () => {
   });
 
   it("shows each user only their own cards, under their own name", async () => {
-    const { me, token } = await seeded();
-    const beto = await member(me);
+    const { token } = await seeded();
+    const beto = await member();
     await beto.add("Tarea de Beto", "en_curso");
     const done = await beto.add("Terminada por Beto", "hecho");
     await beto.edit(done.id, { description: "solo de Beto" });
@@ -115,7 +115,7 @@ describe("weekly report", () => {
     expect(mine).toContain("Ana Prueba");
     expect(mine).not.toContain("Beto");
 
-    const theirs = await (await report((await beto.settings()).reportToken)).text();
+    const theirs = await (await report((await beto.workspaceSettings()).reportToken)).text();
     expect(theirs).toContain(MEMBER.name);
     expect(theirs).toContain("Terminada por Beto");
     expect(theirs).toContain("Tarea de Beto");
@@ -129,30 +129,30 @@ describe("report token", () => {
   it("is long, random and stable until regenerated", async () => {
     const { me, token } = await seeded();
     expect(token.length).toBeGreaterThanOrEqual(43); // 256 bits in base64url
-    expect((await me.settings()).reportToken).toBe(token);
+    expect((await me.workspaceSettings()).reportToken).toBe(token);
   });
 
   it("regenerating kills the old link and opens the new one", async () => {
     const { me, token } = await seeded();
-    const fresh = await me.call<{ reportToken: string }>("/api/settings/report-token", "POST");
+    const fresh = await me.call<{ reportToken: string }>("/api/workspace/report-token", "POST");
     expect(fresh.reportToken).not.toBe(token);
     expect((await report(token)).status).toBe(404);
     expect((await report(fresh.reportToken)).status).toBe(200);
-    expect((await me.settings()).reportToken).toBe(fresh.reportToken);
+    expect((await me.workspaceSettings()).reportToken).toBe(fresh.reportToken);
   });
 
   it("keeps exactly one working link when two tabs regenerate at once", async () => {
     const { me } = await seeded();
-    const regenerate = () => me.call<{ reportToken: string }>("/api/settings/report-token", "POST");
+    const regenerate = () => me.call<{ reportToken: string }>("/api/workspace/report-token", "POST");
     const tokens = (await Promise.all([regenerate(), regenerate()])).map((s) => s.reportToken);
     const statuses = await Promise.all(tokens.map(async (t) => (await report(t)).status));
     expect(statuses.toSorted()).toEqual([200, 404]);
-    expect(tokens).toContain((await me.settings()).reportToken);
+    expect(tokens).toContain((await me.workspaceSettings()).reportToken);
   });
 
   it("needs a session to read or regenerate", async () => {
     await seeded();
-    expect((await send("/api/settings")).status).toBe(401);
-    expect((await send("/api/settings/report-token", { method: "POST" })).status).toBe(401);
+    expect((await send("/api/workspace")).status).toBe(401);
+    expect((await send("/api/workspace/report-token", { method: "POST" })).status).toBe(401);
   });
 });

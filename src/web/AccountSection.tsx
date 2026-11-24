@@ -1,11 +1,11 @@
 import { useState, type FormEvent } from "react";
-import type { Settings } from "../shared/model";
+import type { Me } from "../shared/model";
 import { api } from "./api";
 import form from "./form.module.css";
 import styles from "./SettingsDialog.module.css";
 
-function NameForm(props: { settings: Settings; onChange: (settings: Settings) => void }) {
-  const [name, setName] = useState(props.settings.name);
+function NameForm(props: { me: Me; onChange: (me: Me) => void }) {
+  const [name, setName] = useState(props.me.name);
   const [saved, setSaved] = useState(false);
   const [failed, setFailed] = useState(false);
   const next = name.trim();
@@ -39,10 +39,10 @@ function NameForm(props: { settings: Settings; onChange: (settings: Settings) =>
             setSaved(false);
           }}
         />
-        <p className={styles.hint}>{props.settings.email}</p>
+        <p className={styles.hint}>{props.me.email}</p>
       </div>
       <div className={form.actions}>
-        <button type="submit" className={form.secondary} disabled={!next || next === props.settings.name}>
+        <button type="submit" className={form.secondary} disabled={!next || next === props.me.name}>
           Guardar nombre
         </button>
         {saved && <span role="status">Nombre guardado.</span>}
@@ -56,13 +56,13 @@ function NameForm(props: { settings: Settings; onChange: (settings: Settings) =>
   );
 }
 
-export function AccountSection(props: { settings: Settings; onChange: (settings: Settings) => void }) {
+export function AccountSection(props: { me: Me; onChange: (me: Me) => void }) {
   return (
     <section className={styles.section} aria-labelledby="account-heading">
       <h3 id="account-heading" className={styles.heading}>
         Cuenta
       </h3>
-      <NameForm settings={props.settings} onChange={props.onChange} />
+      <NameForm me={props.me} onChange={props.onChange} />
     </section>
   );
 }

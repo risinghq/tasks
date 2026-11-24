@@ -1,33 +1,54 @@
 import { sql } from "drizzle-orm";
-import { check, index, integer, sqliteTable, text, unique } from "drizzle-orm/sqlite-core";
+import { check, index, integer, primaryKey, sqliteTable, text, unique } from "drizzle-orm/sqlite-core";
 import {
   LABEL_COLORS,
   LISTS,
-  ROLES,
+  WORKSPACE_ROLES,
   type ChecklistItem,
   type LabelColor,
   type ListId,
-  type Role,
+  type WorkspaceRole,
 } from "../../shared/model";
 
-/** A user signs in with the Google account that has their email. The account the migration creates has no email until it is claimed. */
+/** A person who signs in with the Google account that has their email. */
 export const users = sqliteTable(
   "users",
   {
     id: text().primaryKey(),
-    email: text().unique(),
+    email: text().notNull().unique(),
     name: text().notNull(),
-    role: text({ enum: ROLES }).$type<Role>().notNull(),
     sessionVersion: integer("session_version").notNull().default(0),
-    disabled: integer({ mode: "boolean" }).notNull().default(false),
-    reportToken: text("report_token")
+  },
+  (table) => [check("email_lowercase", sql`${table.email} = lower(${table.email})`)],
+);
+
+/** A board. Cards, labels and the report link belong to a workspace. */
+export const workspaces = sqliteTable("workspaces", {
+  id: text().primaryKey(),
+  name: text().notNull(),
+  reportToken: text("report_token")
+    .notNull()
+    .unique()
+    .default(sql`(lower(hex(randomblob(32))))`),
+  /** Unix seconds. */
+  createdAt: integer("created_at").notNull(),
+});
+
+export const workspaceMembers = sqliteTable(
+  "workspace_members",
+  {
+    workspaceId: text("workspace_id")
       .notNull()
-      .unique()
-      .default(sql`(lower(hex(randomblob(32))))`),
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: text({ enum: WORKSPACE_ROLES }).$type<WorkspaceRole>().notNull(),
   },
   (table) => [
-    check("email_lowercase", sql`${table.email} = lower(${table.email})`),
-    check("role_known", sql`${table.role} in ('admin', 'member')`),
+    primaryKey({ columns: [table.workspaceId, table.userId] }),
+    index("workspace_members_user").on(table.userId),
+    check("workspace_role_known", sql`${table.role} in ('owner', 'member')`),
   ],
 );
 
@@ -35,14 +56,14 @@ export const labels = sqliteTable(
   "labels",
   {
     id: text().primaryKey(),
-    userId: text("user_id")
+    workspaceId: text("workspace_id")
       .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
+      .references(() => workspaces.id, { onDelete: "cascade" }),
     name: text().notNull(),
     color: text({ enum: LABEL_COLORS }).$type<LabelColor>().notNull(),
   },
   (table) => [
-    unique("labels_user_name").on(table.userId, table.name),
+    unique("labels_workspace_name").on(table.workspaceId, table.name),
     check("color_known", sql`${table.color} in ('green', 'yellow', 'orange', 'red', 'purple', 'blue')`),
   ],
 );
@@ -51,9 +72,9 @@ export const cards = sqliteTable(
   "cards",
   {
     id: text().primaryKey(),
-    userId: text("user_id")
+    workspaceId: text("workspace_id")
       .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
+      .references(() => workspaces.id, { onDelete: "cascade" }),
     title: text().notNull(),
     description: text().notNull().default(""),
     labelId: text("label_id").references(() => labels.id, { onDelete: "set null" }),
@@ -64,7 +85,7 @@ export const cards = sqliteTable(
     doneDate: text("done_date"),
   },
   (table) => [
-    index("cards_group").on(table.userId, table.list, table.doneDate, table.position),
+    index("cards_group").on(table.workspaceId, table.list, table.doneDate, table.position),
     check("done_date_iff_hecho", sql`(${table.list} = 'hecho') = (${table.doneDate} is not null)`),
   ],
 );
@@ -75,13 +96,13 @@ export const loginAttempts = sqliteTable("login_attempts", {
   attempts: integer().notNull(),
   /** Unix seconds. */
   windowStart: integer("window_start").notNull(),
-  /** Unix seconds. Zero, or in the past, when the email is not locked. */
+  /** Unix seconds. Zero, or in the past, when the key is not locked. */
   lockedUntil: integer("locked_until").notNull().default(0),
 });
 
 /**
- * A member's personal API token. Only the SHA-256 of the token is stored. The
- * token itself is shown once, when it is made.
+ * A member's personal API token, valid for one workspace. Only the SHA-256 of
+ * the token is stored. The token itself is shown once, when it is made.
  */
 export const apiTokens = sqliteTable(
   "api_tokens",
@@ -90,6 +111,9 @@ export const apiTokens = sqliteTable(
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
     name: text().notNull(),
     tokenHash: text("token_hash").notNull().unique(),
     /** Unix seconds. */
@@ -97,5 +121,5 @@ export const apiTokens = sqliteTable(
     /** Unix seconds of the last request, or null while unused. */
     lastUsedAt: integer("last_used_at"),
   },
-  (table) => [index("api_tokens_user").on(table.userId)],
+  (table) => [index("api_tokens_user").on(table.userId, table.workspaceId)],
 );

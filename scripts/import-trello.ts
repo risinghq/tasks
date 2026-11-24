@@ -4,24 +4,27 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { mapTrelloExport, ownerKeyOf, toSql, type Owner } from "../src/import/trello";
-import { FIRST_ADMIN_ID } from "../src/worker/db/first-admin";
 import { targetArgs } from "./d1";
 
-const USAGE = "Usage: bun run import:trello <export.json> [--email <email>] [--apply local|remote]";
+const USAGE =
+  "Usage: bun run import:trello <export.json> (--email <email> | --workspace <id>) [--apply local|remote]";
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
-  options: { apply: { type: "string" }, email: { type: "string" } },
+  options: { apply: { type: "string" }, email: { type: "string" }, workspace: { type: "string" } },
 });
 const [path] = positionals;
 
-if (!path || (values.apply !== undefined && values.apply !== "local" && values.apply !== "remote")) {
+if (
+  !path ||
+  Boolean(values.email) === Boolean(values.workspace) ||
+  (values.apply !== undefined && values.apply !== "local" && values.apply !== "remote")
+) {
   console.error(USAGE);
   process.exit(2);
 }
 
-// Without --email the cards go to the first admin.
-const owner: Owner = values.email ? { email: values.email } : { id: FIRST_ADMIN_ID };
+const owner: Owner = values.email ? { email: values.email } : { id: values.workspace! };
 const cards = await mapTrelloExport(JSON.parse(readFileSync(path, "utf8")), ownerKeyOf(owner));
 const sql = toSql(cards, owner);
 

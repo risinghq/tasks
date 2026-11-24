@@ -4,17 +4,17 @@ import type { CreateLabel, UpdateLabel } from "../shared/schemas";
 import { isUniqueViolation, type Db } from "./db/client";
 import { labels } from "./db/schema";
 
-/** The user already has a label with that name, or the id belongs to someone else. */
+/** The workspace already has a label with that name, or the id belongs to another workspace. */
 export class LabelConflict extends Error {}
 
 const labelColumns = { id: labels.id, name: labels.name, color: labels.color };
 
 /**
- * Every read and write of labels, for one user. Deleting a label clears it from
+ * Every read and write of labels, for one workspace. Deleting a label clears it from
  * the cards that carry it (`cards.label_id` is `ON DELETE SET NULL`).
  */
-export function labelsOf(db: Db, userId: string) {
-  const mine = eq(labels.userId, userId);
+export function labelsOf(db: Db, workspaceId: string) {
+  const mine = eq(labels.workspaceId, workspaceId);
 
   const get = (id: string): Promise<Label | undefined> =>
     db
@@ -33,7 +33,7 @@ export function labelsOf(db: Db, userId: string) {
       const id = input.id ?? crypto.randomUUID();
       const created = await db
         .insert(labels)
-        .values({ id, userId, name: input.name, color: input.color })
+        .values({ id, workspaceId, name: input.name, color: input.color })
         .onConflictDoNothing()
         .returning(labelColumns)
         .get();

@@ -1,14 +1,14 @@
 import { DndContext, DragOverlay } from "@dnd-kit/core";
 import { Filter as FilterIcon, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { LISTS, LIST_TITLES, type ListId, type Settings } from "../shared/model";
-import { api } from "./api";
+import { LISTS, LIST_TITLES, type ListId } from "../shared/model";
 import styles from "./Board.module.css";
 import { CardBack } from "./CardBack";
 import { CardFace } from "./CardView";
 import { FilterPopover } from "./FilterPopover";
 import { inContainer, parseContainerId } from "./groups";
 import { DoneColumn, FlatColumn } from "./ListColumn";
+import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { QuickEdit } from "./QuickEdit";
 import { SettingsDialog } from "./SettingsDialog";
 import { ShortcutsDialog } from "./ShortcutsDialog";
@@ -21,13 +21,8 @@ import { dragAnnouncements, useCardDrag } from "./useCardDrag";
 import { matches, useFilter } from "./useFilter";
 import { useOpenDays } from "./useOpenDays";
 import { StripeNamesContext, useStripeNamesState } from "./useStripeNames";
-
-function isTyping(target: EventTarget | null): boolean {
-  return (
-    target instanceof HTMLElement &&
-    (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))
-  );
-}
+import { useAccount } from "./useAccount";
+import { useShortcuts } from "./useShortcuts";
 
 const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -43,15 +38,11 @@ export function Board() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
-  const [me, setMe] = useState<Settings | null>(null);
+  const [newWorkspaceOpen, setNewWorkspaceOpen] = useState(false);
+  const { me, setMe, workspace, renameWorkspace, switchWorkspace, shownName } = useAccount();
   // The narrow layout shows one list at a time.
   const [tab, setTab] = useState<ListId>("en_curso");
   const filterButton = useRef<HTMLButtonElement>(null);
-  const hover = useRef<{ card: string | null; composer: string | null }>({ card: null, composer: null });
-
-  useEffect(() => {
-    api.settings().then(setMe, console.error);
-  }, []);
 
   const shown = useMemo(() => board.cards.filter((card) => matches(card, filter)), [board.cards, filter]);
   const drag = useCardDrag(shown, board.move);
@@ -116,28 +107,14 @@ export function Board() {
     document.documentElement.dataset.dragging = String(drag.dragging !== null);
   }, [drag.dragging]);
 
-  const modalOpen = Boolean(route.id) || quick !== null || settingsOpen || helpOpen || filterOpen;
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
-      if (isTyping(event.target) || modalOpen) return;
-      const focused = document.activeElement?.closest<HTMLElement>("[data-card-id]")?.dataset.cardId;
-      const card = hover.current.card ?? focused ?? null;
-      const actions: Record<string, () => void> = {
-        n: () => setComposer(hover.current.composer ?? "en_curso"),
-        e: () => card && quickEdit(card),
-        f: () => setFilterOpen(true),
-        x: clearFilter,
-        "?": () => setHelpOpen(true),
-      };
-      const act = actions[event.key];
-      if (!act) return;
-      // The key must not reach the field that the action focuses.
-      event.preventDefault();
-      act();
-    }
-    addEventListener("keydown", onKeyDown);
-    return () => removeEventListener("keydown", onKeyDown);
+  const modalOpen =
+    Boolean(route.id) || quick !== null || settingsOpen || newWorkspaceOpen || helpOpen || filterOpen;
+  const pointer = useShortcuts(modalOpen, {
+    composer: setComposer,
+    quickEdit,
+    filter: () => setFilterOpen(true),
+    clearFilter,
+    help: () => setHelpOpen(true),
   });
 
   const dragged = drag.dragging && drag.cards.find((card) => card.id === drag.dragging?.id);
@@ -146,17 +123,7 @@ export function Board() {
   return (
     <StripeNamesContext.Provider value={stripeNames}>
       <UiContext.Provider value={ui}>
-        <div
-          className={styles.page}
-          onMouseOver={(event) => {
-            const target = event.target as HTMLElement;
-            hover.current = {
-              card: target.closest<HTMLElement>("[data-card-id]")?.dataset.cardId ?? null,
-              composer: target.closest<HTMLElement>("[data-composer]")?.dataset.composer ?? null,
-            };
-          }}
-          onMouseLeave={() => (hover.current = { card: null, composer: null })}
-        >
+        <div className={styles.page} {...pointer}>
           <header className={styles.header}>
             <div className={styles.tools}>
               <h1 className={styles.title}>Tareas</h1>
@@ -185,7 +152,11 @@ export function Board() {
               )}
             </div>
             <UserMenu
-              name={me?.name ?? null}
+              name={shownName}
+              workspaces={me?.workspaces ?? []}
+              currentId={workspace?.id ?? null}
+              onSwitch={switchWorkspace}
+              onNewWorkspace={() => setNewWorkspaceOpen(true)}
               onSettings={() => setSettingsOpen(true)}
               onShortcuts={() => setHelpOpen(true)}
             />
@@ -297,9 +268,16 @@ export function Board() {
           />
         )}
 
-        {settingsOpen && me && (
-          <SettingsDialog settings={me} onChange={setMe} onClose={() => setSettingsOpen(false)} />
+        {settingsOpen && me && workspace && (
+          <SettingsDialog
+            me={me}
+            workspace={workspace}
+            onMe={setMe}
+            onWorkspace={renameWorkspace}
+            onClose={() => setSettingsOpen(false)}
+          />
         )}
+        {newWorkspaceOpen && <NewWorkspaceDialog onClose={() => setNewWorkspaceOpen(false)} />}
         {helpOpen && <ShortcutsDialog onClose={() => setHelpOpen(false)} />}
         <Toasts toasts={board.toasts} onClose={board.closeToast} />
       </UiContext.Provider>

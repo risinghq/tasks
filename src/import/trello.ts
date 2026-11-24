@@ -65,7 +65,7 @@ function checklistOf(card: TrelloCard): Card["checklist"] {
   );
 }
 
-/** Card ids are global, so the owner is part of the hash: two people importing one export get different ids. */
+/** Card ids are global, so the owner is part of the hash: two workspaces importing one export get different ids. */
 async function idOf(card: TrelloCard, index: number, ownerKey: string): Promise<string> {
   const bytes = new TextEncoder().encode(`${ownerKey}:${index}:${JSON.stringify(card)}`);
   const digest = await crypto.subtle.digest("SHA-256", bytes);
@@ -122,7 +122,10 @@ const quote = (value: string) =>
     .join(" || ");
 const nullable = (value: string | null) => (value === null ? "NULL" : quote(value));
 
-/** The user the cards go to: by id, or by the email of an account that exists. */
+/**
+ * The workspace the cards go to: by id, or by the email of an account that
+ * exists, which names that user's personal workspace (it has the user's id).
+ */
 export type Owner = { id: string } | { email: string };
 
 export const ownerKeyOf = (owner: Owner) => ("id" in owner ? owner.id : owner.email.trim().toLowerCase());
@@ -134,7 +137,7 @@ const ownerSql = (owner: Owner) =>
 
 function appendPosition(card: ImportedCard, owner: string): string {
   const group = card.list === "hecho" ? ` AND done_date = ${quote(card.doneDate!)}` : "";
-  return `(SELECT coalesce(max(position), 0) + 1 FROM cards WHERE user_id = ${owner} AND list = ${quote(card.list)}${group})`;
+  return `(SELECT coalesce(max(position), 0) + 1 FROM cards WHERE workspace_id = ${owner} AND list = ${quote(card.list)}${group})`;
 }
 
 /**
@@ -150,18 +153,18 @@ export function toSql(cards: ImportedCard[], owner: Owner): string {
 
   const labelStatements = [...labels.values()].map(
     (label) =>
-      `INSERT INTO labels (id, user_id, name, color) VALUES (lower(hex(randomblob(16))), ${user}, ${quote(label.name)}, ${quote(label.color)}) ON CONFLICT DO NOTHING;`,
+      `INSERT INTO labels (id, workspace_id, name, color) VALUES (lower(hex(randomblob(16))), ${user}, ${quote(label.name)}, ${quote(label.color)}) ON CONFLICT DO NOTHING;`,
   );
   const cardStatements = cards.map(
     (card) =>
-      "INSERT INTO cards (id, user_id, title, description, label_id, requester, checklist, list, position, done_date) VALUES (" +
+      "INSERT INTO cards (id, workspace_id, title, description, label_id, requester, checklist, list, position, done_date) VALUES (" +
       [
         quote(card.id),
         user,
         quote(card.title),
         quote(card.description),
         card.label
-          ? `(SELECT id FROM labels WHERE user_id = ${user} AND name = ${quote(card.label.name)})`
+          ? `(SELECT id FROM labels WHERE workspace_id = ${user} AND name = ${quote(card.label.name)})`
           : "NULL",
         nullable(card.requester),
         quote(JSON.stringify(card.checklist)),
