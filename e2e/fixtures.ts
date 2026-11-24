@@ -13,7 +13,7 @@ type Seed = {
   checklist?: Card["checklist"];
 };
 
-export type Bitacora = {
+export type Tasks = {
   /** Creates cards through the API, in order, and returns them as stored. */
   seed(cards: Seed[]): Promise<Card[]>;
   /** The board as the server stores it. */
@@ -34,8 +34,8 @@ async function allCards(page: Page): Promise<Card[]> {
   return cards;
 }
 
-export const test = base.extend<{ bitacora: Bitacora }>({
-  bitacora: async ({ page }, use) => {
+export const test = base.extend<{ tasks: Tasks }>({
+  tasks: async ({ page }, use) => {
     // Logging in is not under test, so it goes through the API.
     const { email, password } = DEV_ACCOUNT;
     const login = await page.request.post("/login", { form: { email, password }, maxRedirects: 0 });
@@ -75,7 +75,7 @@ export const test = base.extend<{ bitacora: Bitacora }>({
       },
       async open(path = "/") {
         await page.goto(path);
-        await expect(page.getByRole("heading", { name: "Bitácora" })).toBeVisible();
+        await expect(page.getByRole("heading", { name: "Tareas" })).toBeVisible();
         await expect(page.getByRole("region", { name: "En curso" })).toBeVisible();
       },
       card: (title) => page.locator("[data-card-id]", { hasText: title }),

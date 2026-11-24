@@ -7,7 +7,7 @@ src/shared   model, schemas and date rules used by both sides
 src/worker   Hono app, D1 queries, auth
 src/web      React app: board, dialogs, drag and drop
 src/import   Trello export to cards
-scripts      claim-admin, import-trello, prepare-dev, bitacora (log)
+scripts      claim-admin, import-trello, prepare-dev, log
 drizzle      generated migrations
 test         tests that drive the Worker over HTTP
 e2e          Playwright tests that drive the app in Chromium
@@ -122,7 +122,7 @@ statement (`ON DELETE SET NULL`). A card can only take a label of its own user
 
 The session is a signed cookie. The server stores no sessions, only the user.
 
-The cookie `bitacora_session` is `<userId>.<version>.<expires>.<signature>`. The
+The cookie `tasks_session` is `<userId>.<version>.<expires>.<signature>`. The
 signature is an HMAC under `SESSION_SECRET` of the first three parts. The cookie
 is HttpOnly, Secure and SameSite=Lax.
 
@@ -156,11 +156,11 @@ rules under the key `bearer:<address>`, with the address from
 
 ### API tokens
 
-A user makes tokens in Ajustes (`/api/tokens`, session only). A token is `bit_`
-and 32 random bytes in base64url. The table `api_tokens` holds its SHA-256, a
-name, the creation time and the last use, never the token. The token is in the
-response that creates it and nowhere else. Revoking deletes the row. A row
-belongs to one user, and deleting the user deletes their tokens.
+A user makes tokens in Ajustes (`/api/tokens`, session only). A token is
+`tasks_` and 32 random bytes in base64url. The table `api_tokens` holds its
+SHA-256, a name, the creation time and the last use, never the token. The token
+is in the response that creates it and nowhere else. Revoking deletes the row. A
+row belongs to one user, and deleting the user deletes their tokens.
 
 `/api/v1` runs `requireToken` (`api-tokens.ts`) and nothing from `session.ts`,
 so the cookie is not read there and a request without a bearer gets 401. The
@@ -301,9 +301,9 @@ card with Space, moves it with the arrows and drops it with Space.
 | -------------------------- | ---------------------------------------- |
 | The open card              | The path `/c/<id>` (`useCardRoute.ts`)   |
 | The filter                 | The query `q`, `etiqueta`, `solicitante` |
-| Open or closed day         | localStorage, `bitacora.hecho-open`      |
-| Stripes as names or stripe | localStorage, `bitacora.labels-expanded` |
-| Theme: Claro or Oscuro     | localStorage, `bitacora.theme`           |
+| Open or closed day         | localStorage, `tasks.hecho-open`         |
+| Stripes as names or stripe | localStorage, `tasks.labels-expanded`    |
+| Theme: Claro or Oscuro     | localStorage, `tasks.theme`              |
 | Composer drafts            | Memory, until the page reloads           |
 
 `etiqueta` holds a label id, or `none` for cards without a label.
@@ -347,7 +347,7 @@ with `?raw` (`views/layout.tsx`) and inline it, so they match the app. They
 follow the system theme and read no stored choice.
 
 The app follows the system theme. `UserMenu.tsx` offers Sistema, Claro and
-Oscuro. A choice in `bitacora.theme` sets `data-theme` on `<html>`. An inline
+Oscuro. A choice in `tasks.theme` sets `data-theme` on `<html>`. An inline
 script in `index.html` sets it before first paint, so a pinned dark page never
 shows a light frame. Sistema removes the key and the attribute.
 

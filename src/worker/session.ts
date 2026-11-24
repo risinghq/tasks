@@ -5,7 +5,7 @@ import { safeEqualText, sign } from "./crypto";
 import { connect } from "./db/client";
 import { findUser, type User } from "./users";
 
-const COOKIE = "bitacora_session";
+const COOKIE = "tasks_session";
 const MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
 
 export type AppEnv = { Bindings: Env; Variables: { user: User } };

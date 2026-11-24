@@ -42,7 +42,7 @@ function FormPage(props: {
   fields: Field[];
 }) {
   return (
-    <Document title={`${props.title} · Bitácora`} css={LOGIN_CSS}>
+    <Document title={`${props.title} · Tareas`} css={LOGIN_CSS}>
       <main data-elevation="overlay">
         <h1>{props.title}</h1>
         {props.note && <p class="note">{props.note}</p>}
@@ -86,7 +86,7 @@ const passwordField = (autocomplete: "current-password" | "new-password", autofo
 export function LoginPage(props: { error?: string; email?: string }) {
   return (
     <FormPage
-      title="Bitácora"
+      title="Tareas"
       action="/login"
       submit="Entrar"
       error={props.error}
@@ -109,7 +109,7 @@ export function SignUpPage(props: { token: string; error?: string; name?: string
   return (
     <FormPage
       title="Crear tu cuenta"
-      note="Te invitaron a Bitácora."
+      note="Te invitaron a Tareas."
       action={`/invitacion/${props.token}`}
       submit="Crear cuenta"
       error={props.error}
@@ -144,7 +144,7 @@ export function ResetPage(props: { token: string; error?: string }) {
 /** Shown for a link that is used, expired or unknown. */
 export function LinkGonePage() {
   return (
-    <Document title="Enlace no válido · Bitácora" css={LOGIN_CSS}>
+    <Document title="Enlace no válido · Tareas" css={LOGIN_CSS}>
       <main data-elevation="overlay">
         <h1>Este enlace ya no sirve</h1>
         <p class="note">Ya se usó o venció. Pide uno nuevo a quien te lo envió.</p>

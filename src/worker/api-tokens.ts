@@ -10,7 +10,7 @@ import type { AppEnv } from "./session";
 import { findUser, type User } from "./users";
 
 /** Makes a token recognizable in a leaked file or a secret scanner. */
-const PREFIX = "bit_";
+const PREFIX = "tasks_";
 
 const tokenColumns = {
   id: apiTokens.id,

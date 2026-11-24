@@ -37,7 +37,7 @@ const TARGETS: Record<string, Target> = {
   Completado: { list: "hecho", rank: 0 },
 };
 
-/** Trello has more colors than bitacora. The extra ones take the nearest of the six. */
+/** Trello has more colors than tasks. The extra ones take the nearest of the six. */
 const NEAREST: Record<string, LabelColor> = { sky: "blue", lime: "green", pink: "purple", black: "blue" };
 
 function colorOf(trello: string | null | undefined): LabelColor {

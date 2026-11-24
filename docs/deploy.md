@@ -33,7 +33,7 @@ was before the release. Restore the database with it. Redeploy the earlier
 commit to roll the Worker back:
 
 ```sh
-bunx wrangler d1 time-travel restore bitacora --bookmark=<bookmark>
+bunx wrangler d1 time-travel restore tasks --bookmark=<bookmark>
 ```
 
 ## First-time setup
@@ -51,7 +51,7 @@ Run these steps by hand once, before the first push to `master` can deploy.
    `wrangler.jsonc` and do not commit that change:
 
    ```sh
-   bunx wrangler d1 create bitacora
+   bunx wrangler d1 create tasks
    ```
 
 3. Apply the migrations and deploy. The first deploy on an account asks you to
@@ -82,9 +82,9 @@ Run these steps by hand once, before the first push to `master` can deploy.
    `--remote` it claims the account in the local database.
 
 `workers_dev` is on, so the Worker answers at
-`https://bitacora.<subdomain>.workers.dev`. Wrangler prints the address after
-the deploy. Sign in there with the email and password you chose, then invite the
-others from Ajustes. That address is the `BITACORA_URL` of the script.
+`https://tasks.<subdomain>.workers.dev`. Wrangler prints the address after the
+deploy. Sign in there with the email and password you chose, then invite the
+others from Ajustes. That address is the `TASKS_URL` of the script.
 
 Deploying over a database that already holds cards keeps them, and the report
 link, under the first admin. Run steps 3 to 5. If the Worker still has an

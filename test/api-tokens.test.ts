@@ -31,7 +31,7 @@ const titles = async (res: Response) =>
 describe("creating a token", () => {
   it("shows the secret once and lists the token by name and last use", async () => {
     const { me, token } = await ana();
-    expect(token).toMatch(/^bit_[\w-]{43}$/);
+    expect(token).toMatch(/^tasks_[\w-]{43}$/);
 
     const [listed] = await me.tokens();
     expect(listed).toEqual({
@@ -189,7 +189,7 @@ describe("which routes take which credential", () => {
 
   it("ignores the cookie when a bearer is sent", async () => {
     const { me } = await ana();
-    const res = await send("/api/v1/cards", { cookie: me.cookie, bearer: "bit_otro" });
+    const res = await send("/api/v1/cards", { cookie: me.cookie, bearer: "tasks_otro" });
     expect(res.status).toBe(401);
   });
 
@@ -242,7 +242,7 @@ describe("a disabled owner", () => {
 describe("a wrong token", () => {
   it("is refused with the same answer whether it is malformed or well formed", async () => {
     await ana();
-    for (const bearer of ["x", "bit_" + "A".repeat(43)]) {
+    for (const bearer of ["x", "tasks_" + "A".repeat(43)]) {
       const res = await get(bearer);
       expect([res.status, await res.json()]).toEqual([401, { error: "unauthorized" }]);
     }
@@ -251,7 +251,7 @@ describe("a wrong token", () => {
 
   it("locks an address at the sixth bad attempt, not a good token, not another address", async () => {
     const { token } = await ana();
-    const bad = "bit_" + "B".repeat(43);
+    const bad = "tasks_" + "B".repeat(43);
     for (let attempt = 1; attempt <= 5; attempt++) {
       expect((await get(bad, "", "203.0.113.7")).status).toBe(401);
     }

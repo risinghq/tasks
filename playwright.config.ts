@@ -21,7 +21,7 @@ export default defineConfig({
     // requests instead of one per source module.
     command: `rm -rf ${state} && bun scripts/prepare-dev.ts && vite build && vite preview --port ${port} --strictPort`,
     env: {
-      BITACORA_STATE: state,
+      TASKS_STATE: state,
       CLOUDFLARE_DEV_REGISTRY_PATH: ".wrangler/e2e-dev-registry",
     },
     url: `http://localhost:${port}/login`,

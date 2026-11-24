@@ -3,10 +3,10 @@ import { chooseFromMenu, expect, test } from "./fixtures";
 test("an admin invites a member, who signs up, adds a card and is never seen on the admin's board", async ({
   page,
   browser,
-  bitacora,
+  tasks,
 }, testInfo) => {
-  await bitacora.seed([{ title: "Del admin", list: "en_curso" }]);
-  await bitacora.open();
+  await tasks.seed([{ title: "Del admin", list: "en_curso" }]);
+  await tasks.open();
 
   await chooseFromMenu(page, "Ajustes");
   const settings = page.getByRole("dialog", { name: "Ajustes" });
@@ -23,7 +23,7 @@ test("an admin invites a member, who signs up, adds a card and is never seen on 
     timezoneId: "America/Lima",
   });
   const theirs = await guest.newPage();
-  const email = `ana-${Date.now()}@bitacora.test`;
+  const email = `ana-${Date.now()}@tasks.test`;
   await theirs.goto(link);
   await theirs.getByLabel("Nombre").fill("Ana");
   await theirs.getByLabel("Correo").fill(email);
@@ -31,7 +31,7 @@ test("an admin invites a member, who signs up, adds a card and is never seen on 
   await theirs.getByRole("button", { name: "Crear cuenta" }).click();
 
   // They land signed in on an empty board and add a card.
-  await expect(theirs.getByRole("heading", { name: "Bitácora" })).toBeVisible();
+  await expect(theirs.getByRole("heading", { name: "Tareas" })).toBeVisible();
   await expect(theirs.locator("[data-card-id]")).toHaveCount(0);
   const active = theirs.getByRole("region", { name: "En curso", exact: true });
   await active.getByRole("button", { name: "Añade una tarjeta" }).click();
@@ -42,10 +42,10 @@ test("an admin invites a member, who signs up, adds a card and is never seen on 
 
   // The admin's board shows only their own card, also after a reload.
   await page.reload();
-  await bitacora.open();
-  await expect(bitacora.card("Del admin")).toBeVisible();
+  await tasks.open();
+  await expect(tasks.card("Del admin")).toBeVisible();
   await expect(page.locator("[data-card-id]")).toHaveCount(1);
-  await expect(bitacora.card("De Ana")).toHaveCount(0);
+  await expect(tasks.card("De Ana")).toHaveCount(0);
 
   // The invitation works once.
   const second = await browser.newContext({ baseURL: testInfo.project.use.baseURL, locale: "es-PE" });

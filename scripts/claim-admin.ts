@@ -68,7 +68,7 @@ const sql = claimAdminSql({
 });
 const claimed = executeSql(sql, {
   remote: values.remote,
-  state: process.env.BITACORA_STATE,
+  state: process.env.TASKS_STATE,
 });
 if (claimed === 0) {
   console.error("The first admin is already claimed. Nothing changed.");
