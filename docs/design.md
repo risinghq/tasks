@@ -1,11 +1,10 @@
 # Design
 
 `src/web/styles/tokens.css` holds the visual values of the app and of the server
-pages (login, invitation, reset and the report). Colors, type, space, radius,
-shadow, layers and motion come from it. A component reads a role name such as
-`--text`, `--card` or `--accent`. It never reads a scale step (`--accent-9`) and
-never writes a color, a font, a shadow, a duration or a spacing value of its
-own.
+pages (login and the report). Colors, type, space, radius, shadow, layers and
+motion come from it. A component reads a role name such as `--text`, `--card` or
+`--accent`. It never reads a scale step (`--accent-9`) and never writes a color,
+a font, a shadow, a duration or a spacing value of its own.
 
 A size that one component owns stays in that component's stylesheet, in rem: the
 height of a toast, the minimum height of the description field, the box of an
@@ -34,8 +33,7 @@ its own 12-step scale, not an inversion of the other.
 
 - A higher surface is lighter in dark: `--list` < `--card` < `--overlay`.
 - The board background is one token, `--board`, per theme.
-- Login, invitation, reset and the report follow the system and never read a
-  stored choice.
+- Login and the report follow the system and never read a stored choice.
 
 ## Color
 

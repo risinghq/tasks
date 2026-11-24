@@ -1,26 +1,45 @@
 import { env } from "cloudflare:workers";
-import { describe, expect, it } from "vitest";
-import {
-  ADMIN,
-  admin,
-  clientFor,
-  cookieOf,
-  idOf,
-  member,
-  MEMBER,
-  send,
-  setNow,
-  signIn,
-  signUp,
-} from "./helpers";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { ADMIN, admin, clientFor, cookieOf, idOf, member, MEMBER, send, setNow, signIn } from "./helpers";
 
-const login = (email: string, password: string) =>
-  send("/login", { method: "POST", form: { email, password } });
+const b64url = (value: unknown) => btoa(JSON.stringify(value)).replaceAll("+", "-").replaceAll("/", "_");
 
-const attemptEmails = async () =>
-  (await env.DB.prepare("SELECT key FROM login_attempts ORDER BY key").all<{ key: string }>()).results.map(
-    (row) => row.key,
+type Claims = Partial<Record<"aud" | "iss" | "exp" | "email" | "email_verified", unknown>>;
+
+/** Makes Google's token endpoint answer with an ID token carrying these claims. */
+function googleSays(claims: Claims, status = 200) {
+  const full = {
+    aud: env.GOOGLE_CLIENT_ID,
+    iss: "https://accounts.google.com",
+    exp: Math.floor(Date.now() / 1000) + 3600,
+    email: ADMIN.email,
+    email_verified: true,
+    ...claims,
+  };
+  const fetched = vi.fn(
+    async (_url: unknown, _init?: RequestInit) =>
+      new Response(JSON.stringify({ id_token: `x.${b64url(full)}.y` }), { status }),
   );
+  vi.stubGlobal("fetch", fetched);
+  return fetched;
+}
+
+/** Starts the Google handshake and returns the redirect and the cookie the browser keeps. */
+async function startGoogle() {
+  const res = await send("/auth/google");
+  const location = new URL(res.headers.get("Location")!);
+  return { res, location, state: location.searchParams.get("state")!, cookie: cookieOf(res) };
+}
+
+/** Finishes the handshake the way Google's redirect back does. */
+async function callback(start: Awaited<ReturnType<typeof startGoogle>>, query: Record<string, string> = {}) {
+  const params = new URLSearchParams({ code: "codigo", state: start.state, ...query });
+  return send(`/auth/google/callback?${params}`, { cookie: start.cookie });
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("access", () => {
   it("rejects API calls without a session", async () => {
@@ -36,50 +55,17 @@ describe("access", () => {
     expect(res.headers.get("Location")).toBe("/login");
   });
 
-  it("serves the login page without a session", async () => {
+  it("offers Google on the login page and nothing else", async () => {
     const html = await (await send("/login")).text();
-    expect(html).toContain('name="email"');
-    expect(html).toContain('name="password"');
+    expect(html).toContain('href="/auth/google"');
+    expect(html).not.toContain('name="password"');
   });
 
-  it("refuses a malformed multipart form like an empty one", async () => {
-    const res = await send("/login", {
-      method: "POST",
-      raw: { body: "no boundary here", type: "multipart/form-data; boundary=x" },
-    });
-    expect(res.status).toBe(401);
-    expect(res.headers.getSetCookie()).toEqual([]);
-  });
-
-  it("refuses a wrong password and sets no cookie", async () => {
-    await admin();
-    const res = await login(ADMIN.email, "otra");
-    expect(res.status).toBe(401);
-    expect(res.headers.getSetCookie()).toEqual([]);
-    expect(await res.text()).toContain("Correo o contraseña incorrectos");
-  });
-
-  it("refuses an unknown email the same way", async () => {
-    await admin();
-    const res = await login("nadie@example.com", "clave-de-prueba");
-    expect(res.status).toBe(401);
-    expect(await res.text()).toContain("Correo o contraseña incorrectos");
-  });
-
-  it("signs in with the email in any case and sets a hardened cookie", async () => {
-    await admin();
-    const res = await login(`  ${ADMIN.email.toUpperCase()} `, ADMIN.password);
-    expect(res.status).toBe(303);
-    const cookie = res.headers.getSetCookie()[0]!;
-    expect(cookie).toMatch(/HttpOnly/i);
-    expect(cookie).toMatch(/Secure/i);
-    expect(cookie).toMatch(/SameSite=Lax/i);
-    expect((await send("/api/board", { cookie: cookie.split(";")[0] })).status).toBe(200);
-  });
-
-  it("keeps the first admin out until it is claimed", async () => {
-    expect((await login("", "")).status).toBe(401);
-    expect((await login("null", "x")).status).toBe(401);
+  it("sends a signed-in user from the login page to the board", async () => {
+    const me = await admin();
+    const res = await send("/login", { cookie: me.cookie });
+    expect(res.status).toBe(302);
+    expect(res.headers.get("Location")).toBe("/");
   });
 
   it("rejects a forged or tampered cookie", async () => {
@@ -110,64 +96,96 @@ describe("access", () => {
   });
 });
 
-describe("failed logins", () => {
-  it("refuses the sixth attempt in 15 minutes even with the right password", async () => {
-    await admin();
-    for (let attempt = 1; attempt <= 5; attempt++) {
-      expect((await login(ADMIN.email, "mala")).status).toBe(401);
-    }
-    const locked = await login(ADMIN.email, ADMIN.password);
-    expect(locked.status).toBe(429);
-    expect(await locked.text()).toContain("Demasiados intentos");
-    expect(locked.headers.getSetCookie()).toEqual([]);
+describe("signing in with Google", () => {
+  it("sends the browser to Google with state and a PKCE challenge, and keeps the handshake in a cookie", async () => {
+    const { res, location, state } = await startGoogle();
+    expect(res.status).toBe(302);
+    expect(location.origin + location.pathname).toBe("https://accounts.google.com/o/oauth2/v2/auth");
+    expect(location.searchParams.get("client_id")).toBe(env.GOOGLE_CLIENT_ID);
+    expect(location.searchParams.get("redirect_uri")).toBe("https://tasks.test/auth/google/callback");
+    expect(location.searchParams.get("code_challenge_method")).toBe("S256");
+    expect(location.searchParams.get("code_challenge")).toBeTruthy();
+    const cookie = res.headers.getSetCookie()[0]!;
+    expect(cookie).toContain(`tasks_google=${state}.`);
+    expect(cookie).toMatch(/HttpOnly/i);
+    expect(cookie).toMatch(/Secure/i);
+    expect(cookie).toMatch(/Path=\/auth/);
   });
 
-  it("lets the email in again after 15 minutes", async () => {
-    setNow("2026-10-16T17:00:00Z");
-    await admin();
-    for (let attempt = 1; attempt <= 6; attempt++) await login(ADMIN.email, "mala");
+  it("signs in the account that has the email, in any case, and sends the verifier to Google", async () => {
+    const me = await admin();
+    const fetched = googleSays({ email: ADMIN.email.toUpperCase() });
+    const start = await startGoogle();
+    const res = await callback(start);
 
-    setNow("2026-10-16T17:14:00Z");
-    expect((await login(ADMIN.email, ADMIN.password)).status).toBe(429);
+    expect(res.status).toBe(303);
+    expect(res.headers.get("Location")).toBe("/");
+    const session = res.headers.getSetCookie().find((c) => c.startsWith("tasks_session="))!;
+    expect(session).toMatch(/HttpOnly/i);
+    expect(session).toMatch(/Secure/i);
+    expect(session).toMatch(/SameSite=Lax/i);
+    expect(await clientFor(session.split(";")[0]!).settings()).toMatchObject({ email: ADMIN.email });
+    expect(await me.status("/api/board")).toBe(200);
 
-    setNow("2026-10-16T17:16:00Z");
-    expect((await login(ADMIN.email, ADMIN.password)).status).toBe(303);
+    const sent = new URLSearchParams(fetched.mock.calls[0]![1]!.body as URLSearchParams);
+    expect(sent.get("code")).toBe("codigo");
+    expect(sent.get("code_verifier")).toBe(start.cookie.split(".")[1]);
+    expect(sent.get("client_secret")).toBe(env.GOOGLE_CLIENT_SECRET);
   });
 
-  it("counts per email and forgets the failures after a good sign-in", async () => {
+  it("refuses a Google account nobody added, and says which", async () => {
+    await admin();
+    googleSays({ email: "intruso@example.com" });
+    const res = await callback(await startGoogle());
+    expect(res.status).toBe(403);
+    expect(await res.text()).toContain("intruso@example.com");
+    expect(res.headers.getSetCookie().some((c) => c.startsWith("tasks_session="))).toBe(false);
+  });
+
+  it("keeps the first admin out until it is claimed", async () => {
+    googleSays({ email: "" });
+    expect((await callback(await startGoogle())).status).toBe(403);
+  });
+
+  it("refuses a disabled account", async () => {
     const me = await admin();
     await member(me);
-    for (let attempt = 1; attempt <= 4; attempt++) await login(ADMIN.email, "mala");
-    expect((await login(MEMBER.email, MEMBER.password)).status).toBe(303);
-    expect((await login(ADMIN.email, ADMIN.password)).status).toBe(303);
-    for (let attempt = 1; attempt <= 5; attempt++) {
-      expect((await login(ADMIN.email, "mala")).status).toBe(401);
-    }
+    await me.call(`/api/members/${await idOf(me, MEMBER.email)}`, "PATCH", { disabled: true });
+    googleSays({ email: MEMBER.email });
+    const res = await callback(await startGoogle());
+    expect(res.status).toBe(403);
+    expect(res.headers.getSetCookie().some((c) => c.startsWith("tasks_session="))).toBe(false);
   });
 
-  it("counts attempts for emails without an account too", async () => {
+  it.each([
+    ["an unverified email", { email_verified: false }],
+    ["another client's token", { aud: "otro-cliente" }],
+    ["another issuer", { iss: "https://evil.example" }],
+    ["an expired token", { exp: 1 }],
+  ])("refuses %s", async (_name, claims) => {
     await admin();
-    for (let attempt = 1; attempt <= 5; attempt++) await login("nadie@example.com", "x");
-    expect((await login("nadie@example.com", "x")).status).toBe(429);
+    googleSays(claims);
+    const res = await callback(await startGoogle());
+    expect(res.status).toBe(401);
+    expect(res.headers.getSetCookie().some((c) => c.startsWith("tasks_session="))).toBe(false);
   });
 
-  it("drops the rows of emails that stopped trying, whether or not they were locked", async () => {
-    setNow("2026-10-16T17:00:00Z");
+  it("refuses when Google rejects the code", async () => {
     await admin();
-    await login("uno@example.com", "x");
-    for (let attempt = 1; attempt <= 6; attempt++) await login("dos@example.com", "x");
-    expect(await attemptEmails()).toEqual(["dos@example.com", "uno@example.com"]);
-
-    setNow("2026-10-16T17:20:00Z");
-    await login("tres@example.com", "x");
-    expect(await attemptEmails()).toEqual(["tres@example.com"]);
+    googleSays({}, 400);
+    expect((await callback(await startGoogle())).status).toBe(401);
   });
 
-  it("refuses an email longer than an address can be without counting it", async () => {
-    const long = `${"a".repeat(250)}@example.com`;
-    expect((await login(long, "x")).status).toBe(401);
-    const rows = await env.DB.prepare("SELECT count(*) AS n FROM login_attempts").first<{ n: number }>();
-    expect(rows?.n).toBe(0);
+  it("refuses a callback with the wrong state, no code or no handshake cookie", async () => {
+    await admin();
+    const fetched = googleSays({});
+    const start = await startGoogle();
+    expect((await callback(start, { state: "otro" })).status).toBe(400);
+    expect((await send(`/auth/google/callback?code=c&state=${start.state}`)).status).toBe(400);
+    expect((await send(`/auth/google/callback?state=${start.state}`, { cookie: start.cookie })).status).toBe(
+      400,
+    );
+    expect(fetched).not.toHaveBeenCalled();
   });
 });
 
@@ -179,7 +197,6 @@ describe("sessions follow the user row", () => {
 
     await me.call(`/api/members/${id}`, "PATCH", { disabled: true });
     expect(await beto.status("/api/board")).toBe(401);
-    expect((await login(MEMBER.email, MEMBER.password)).status).toBe(403);
 
     await me.call(`/api/members/${id}`, "PATCH", { disabled: false });
     expect(await beto.status("/api/board")).toBe(200);
@@ -192,6 +209,7 @@ describe("sessions follow the user row", () => {
       .bind(MEMBER.email)
       .run();
     expect(await beto.status("/api/board")).toBe(401);
+    expect(await clientFor(await signIn(await idOf(me, MEMBER.email), 1)).status("/api/board")).toBe(200);
   });
 
   it("rejects an expired cookie", async () => {
@@ -202,155 +220,6 @@ describe("sessions follow the user row", () => {
   });
 });
 
-describe("invitations", () => {
-  it("signs the invitee up with their own empty board, signed in", async () => {
-    const me = await admin();
-    await me.add("Solo de Ana", "en_curso");
-    const link = await me.invite("member");
-    expect(link.path).toMatch(/^\/invitacion\/[\w-]{43}$/);
-
-    const page = await send(link.path);
-    expect(page.status).toBe(200);
-    expect(await page.text()).toContain('name="name"');
-
-    const res = await signUp(link);
-    expect(res.status).toBe(303);
-    const beto = clientFor(cookieOf(res));
-    expect(await beto.board()).toMatchObject({ cards: [], labels: [] });
-    expect(await beto.settings()).toMatchObject({ name: MEMBER.name, email: MEMBER.email, role: "member" });
-  });
-
-  it("gives the role the invite carried", async () => {
-    const me = await admin();
-    const res = await signUp(await me.invite("admin"));
-    const other = clientFor(cookieOf(res));
-    expect((await other.settings()).role).toBe("admin");
-    expect(await other.status("/api/members")).toBe(200);
-  });
-
-  it("works once", async () => {
-    const me = await admin();
-    const link = await me.invite("member");
-    expect((await signUp(link)).status).toBe(303);
-
-    const second = await signUp(link, { ...MEMBER, email: "otra@example.com" });
-    expect(second.status).toBe(404);
-    expect((await send(link.path)).status).toBe(404);
-    expect(await me.members()).toHaveLength(2);
-  });
-
-  it("lets only one of two simultaneous uses win", async () => {
-    const me = await admin();
-    const link = await me.invite("member");
-    const results = await Promise.all([
-      signUp(link, { ...MEMBER, email: "uno@example.com" }),
-      signUp(link, { ...MEMBER, email: "dos@example.com" }),
-    ]);
-    expect(results.map((r) => r.status).toSorted()).toEqual([303, 404]);
-    expect(await me.members()).toHaveLength(2);
-  });
-
-  it("fails after seven days", async () => {
-    setNow("2026-10-16T17:00:00Z");
-    const me = await admin();
-    const link = await me.invite("member");
-
-    setNow("2026-10-23T16:59:00Z");
-    expect((await send(link.path)).status).toBe(200);
-
-    setNow("2026-10-23T17:01:00Z");
-    expect((await send(link.path)).status).toBe(404);
-    expect((await signUp(link)).status).toBe(404);
-    expect(await me.members()).toHaveLength(1);
-  });
-
-  it("keeps the link usable when the email is taken", async () => {
-    const me = await admin();
-    const link = await me.invite("member");
-    const taken = await signUp(link, { ...MEMBER, email: ADMIN.email.toUpperCase() });
-    expect(taken.status).toBe(409);
-    expect((await signUp(link)).status).toBe(303);
-  });
-
-  it("asks again for a short password or a bad email without using the link", async () => {
-    const me = await admin();
-    const link = await me.invite("member");
-    expect((await signUp(link, { ...MEMBER, password: "corta" })).status).toBe(400);
-    expect((await signUp(link, { ...MEMBER, email: "no-es-un-correo" })).status).toBe(400);
-    expect((await signUp(link)).status).toBe(303);
-  });
-
-  it("stores only a hash of the token", async () => {
-    const me = await admin();
-    const link = await me.invite("member");
-    const token = link.path.split("/").pop()!;
-    const rows = await env.DB.prepare("SELECT token_hash FROM links").all<{ token_hash: string }>();
-    expect(rows.results.map((row) => row.token_hash)).not.toContain(token);
-    expect(rows.results).toHaveLength(1);
-  });
-});
-
-describe("password reset", () => {
-  it("sets the new password and signs out the user's other sessions", async () => {
-    const me = await admin();
-    const beto = await member(me);
-    const other = clientFor(await signIn(MEMBER.email, MEMBER.password));
-    const link = await me.resetLink(await idOf(me, MEMBER.email));
-    expect(link.path).toMatch(/^\/restablecer\/[\w-]{43}$/);
-
-    expect((await send(link.path)).status).toBe(200);
-    const res = await send(link.path, { method: "POST", form: { password: "una-clave-nueva" } });
-    expect(res.status).toBe(303);
-
-    expect(await beto.status("/api/board")).toBe(401);
-    expect(await other.status("/api/board")).toBe(401);
-    expect(await clientFor(cookieOf(res)).status("/api/board")).toBe(200);
-    expect((await login(MEMBER.email, MEMBER.password)).status).toBe(401);
-    expect((await login(MEMBER.email, "una-clave-nueva")).status).toBe(303);
-  });
-
-  it("works once and fails after seven days", async () => {
-    setNow("2026-10-16T17:00:00Z");
-    const me = await admin();
-    await member(me);
-    const id = await idOf(me, MEMBER.email);
-
-    const used = await me.resetLink(id);
-    expect((await send(used.path, { method: "POST", form: { password: "una-clave-nueva" } })).status).toBe(
-      303,
-    );
-    expect((await send(used.path, { method: "POST", form: { password: "y-otra-mas-larga" } })).status).toBe(
-      404,
-    );
-    expect((await login(MEMBER.email, "una-clave-nueva")).status).toBe(303);
-
-    const old = await me.resetLink(id);
-    setNow("2026-10-24T17:00:00Z");
-    expect((await send(old.path)).status).toBe(404);
-    expect((await send(old.path, { method: "POST", form: { password: "y-otra-mas-larga" } })).status).toBe(
-      404,
-    );
-  });
-
-  it("does not sign a disabled user in", async () => {
-    const me = await admin();
-    await member(me);
-    const id = await idOf(me, MEMBER.email);
-    const link = await me.resetLink(id);
-    await me.call(`/api/members/${id}`, "PATCH", { disabled: true });
-    const res = await send(link.path, { method: "POST", form: { password: "una-clave-nueva" } });
-    expect(res.status).toBe(303);
-    expect(res.headers.getSetCookie()).toEqual([]);
-  });
-
-  it("rejects a link of the other kind", async () => {
-    const me = await admin();
-    const invite = await me.invite("member");
-    const token = invite.path.split("/").pop();
-    expect((await send(`/restablecer/${token}`)).status).toBe(404);
-  });
-});
-
 describe("own account", () => {
   it("renames the user", async () => {
     const me = await admin();
@@ -358,36 +227,6 @@ describe("own account", () => {
       name: "Ana Nueva",
     });
     expect((await me.settings()).name).toBe("Ana Nueva");
-  });
-
-  it("changes the password, signs out other browsers and keeps this one in", async () => {
-    const me = await admin();
-    const other = clientFor(await signIn(ADMIN.email, ADMIN.password));
-
-    const res = await send("/api/settings/password", {
-      method: "POST",
-      cookie: me.cookie,
-      json: { current: ADMIN.password, password: "una-clave-nueva" },
-    });
-    expect(res.status).toBe(204);
-
-    const kept = clientFor(cookieOf(res));
-    expect(await kept.status("/api/board")).toBe(200);
-    expect(await me.status("/api/board")).toBe(401);
-    expect(await other.status("/api/board")).toBe(401);
-    expect((await login(ADMIN.email, ADMIN.password)).status).toBe(401);
-    expect((await login(ADMIN.email, "una-clave-nueva")).status).toBe(303);
-  });
-
-  it("needs the current password and a long enough new one", async () => {
-    const me = await admin();
-    expect(
-      await me.status("/api/settings/password", "POST", { current: "mala", password: "una-clave-nueva" }),
-    ).toBe(403);
-    expect(
-      await me.status("/api/settings/password", "POST", { current: ADMIN.password, password: "corta" }),
-    ).toBe(400);
-    expect(await me.status("/api/board")).toBe(200);
   });
 });
 
@@ -401,14 +240,46 @@ describe("members", () => {
     ]);
   });
 
+  it("adds a member by email with a board of their own", async () => {
+    const me = await admin();
+    await me.add("Solo de Ana", "en_curso");
+    const added = await me.addMember("  Beto@Example.com ", "member");
+    expect(added).toMatchObject({ email: "beto@example.com", name: "beto", role: "member", disabled: false });
+
+    const beto = clientFor(await signIn(added.id));
+    expect(await beto.board()).toMatchObject({ cards: [], labels: [] });
+    expect(await beto.settings()).toMatchObject({ email: "beto@example.com", role: "member" });
+  });
+
+  it("gives the role the admin chose", async () => {
+    const me = await admin();
+    const other = clientFor(await signIn((await me.addMember("jefe@example.com", "admin")).id));
+    expect((await other.settings()).role).toBe("admin");
+    expect(await other.status("/api/members")).toBe(200);
+  });
+
+  it("refuses an email that already has an account", async () => {
+    const me = await admin();
+    expect(
+      await me.status("/api/members", "POST", { email: ADMIN.email.toUpperCase(), role: "member" }),
+    ).toBe(409);
+    expect(await me.members()).toHaveLength(1);
+  });
+
+  it("refuses a bad email", async () => {
+    const me = await admin();
+    expect(await me.status("/api/members", "POST", { email: "no-es-un-correo", role: "member" })).toBe(400);
+  });
+
   it("keeps a member out of every Miembros route", async () => {
     const me = await admin();
     const beto = await member(me);
     const id = await idOf(me, ADMIN.email);
 
     expect(await beto.status("/api/members")).toBe(403);
-    expect(await beto.status("/api/members/invites", "POST", { role: "member" })).toBe(403);
-    expect(await beto.status(`/api/members/${id}/reset-link`, "POST")).toBe(403);
+    expect(await beto.status("/api/members", "POST", { email: "otro@example.com", role: "member" })).toBe(
+      403,
+    );
     expect(await beto.status(`/api/members/${id}`, "PATCH", { disabled: true })).toBe(403);
     expect((await me.settings()).role).toBe("admin");
     expect(await me.members()).toHaveLength(2);
@@ -434,13 +305,12 @@ describe("members", () => {
 
   it("keeps an admin when two admins remove each other at once", async () => {
     const me = await admin();
-    const res = await signUp(await me.invite("admin"));
-    const other = clientFor(cookieOf(res));
+    const added = await me.addMember("jefe@example.com", "admin");
+    const other = clientFor(await signIn(added.id));
     const myId = await idOf(me, ADMIN.email);
-    const otherId = await idOf(me, MEMBER.email);
 
     const results = await Promise.all([
-      me.status(`/api/members/${otherId}`, "PATCH", { disabled: true }),
+      me.status(`/api/members/${added.id}`, "PATCH", { disabled: true }),
       other.status(`/api/members/${myId}`, "PATCH", { disabled: true }),
     ]);
     // The one that lands second is refused: by the guard, or because its admin is already disabled.
@@ -455,6 +325,5 @@ describe("members", () => {
   it("answers 404 for a member that does not exist", async () => {
     const me = await admin();
     expect(await me.status("/api/members/nope", "PATCH", { disabled: true })).toBe(404);
-    expect(await me.status("/api/members/nope/reset-link", "POST")).toBe(404);
   });
 });

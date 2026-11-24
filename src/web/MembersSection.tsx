@@ -1,12 +1,8 @@
-import { useEffect, useState } from "react";
-import { ROLE_TITLES, ROLES, type IssuedLink, type Member, type Role } from "../shared/model";
-import { api } from "./api";
-import { CopyLink } from "./CopyLink";
+import { useEffect, useState, type FormEvent } from "react";
+import { ROLE_TITLES, ROLES, type Member, type Role } from "../shared/model";
+import { api, ApiError } from "./api";
 import form from "./form.module.css";
 import styles from "./SettingsDialog.module.css";
-
-const expiry = (link: IssuedLink) =>
-  `Vence el ${new Date(link.expiresAt * 1000).toLocaleDateString("es", { day: "numeric", month: "long" })}. Sirve una sola vez.`;
 
 function RoleSelect(props: {
   id: string;
@@ -33,61 +29,68 @@ function RoleSelect(props: {
   );
 }
 
-function Invite() {
+function AddMember(props: { onAdded: (member: Member) => void }) {
+  const [email, setEmail] = useState("");
   const [role, setRole] = useState<Role>("member");
-  const [link, setLink] = useState<IssuedLink | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  async function invite() {
-    setFailed(false);
+  async function add(event: FormEvent) {
+    event.preventDefault();
+    setError(null);
     try {
-      setLink(await api.invite(role));
-    } catch (error) {
-      console.error(error);
-      setFailed(true);
+      props.onAdded(await api.addMember({ email, role }));
+      setEmail("");
+    } catch (failure) {
+      console.error(failure);
+      setError(
+        failure instanceof ApiError && failure.status === 409
+          ? "Ese correo ya tiene una cuenta."
+          : "No se pudo añadir al miembro.",
+      );
     }
   }
 
   return (
-    <div>
-      <div className={styles.inviteRow}>
-        <RoleSelect id="invite-role" label="Rol de la invitación" value={role} onChange={setRole} />
-        <button type="button" className={form.primary} onClick={invite}>
-          Invitar
+    <form onSubmit={add}>
+      <div className={styles.addRow}>
+        <input
+          className={form.input}
+          type="email"
+          required
+          aria-label="Correo de Google del miembro"
+          placeholder="correo@gmail.com"
+          autoComplete="off"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+        />
+        <RoleSelect id="add-role" label="Rol del miembro nuevo" value={role} onChange={setRole} />
+        <button type="submit" className={form.primary}>
+          Añadir
         </button>
       </div>
-      {failed && (
+      <p className={styles.hint}>Entra con la cuenta de Google que tiene ese correo.</p>
+      {error && (
         <p className={form.error} role="alert">
-          No se pudo crear la invitación.
+          {error}
         </p>
       )}
-      {link && (
-        <>
-          <CopyLink id="invite-link" label="Enlace de invitación" value={`${location.origin}${link.path}`} />
-          <p className={styles.hint}>{expiry(link)}</p>
-        </>
-      )}
-    </div>
+    </form>
   );
 }
 
 function Row(props: { member: Member; self: boolean; onChange: (member: Member) => void }) {
   const { member } = props;
-  const [reset, setReset] = useState<IssuedLink | null>(null);
   const [failed, setFailed] = useState(false);
 
-  async function run(action: () => Promise<void>) {
+  async function update(patch: { role?: Role; disabled?: boolean }) {
     setFailed(false);
     try {
-      await action();
+      props.onChange(await api.updateMember(member.id, patch));
     } catch (error) {
       console.error(error);
       setFailed(true);
     }
   }
-
-  const update = (patch: { role?: Role; disabled?: boolean }) =>
-    run(async () => props.onChange(await api.updateMember(member.id, patch)));
 
   return (
     <li className={styles.member} data-disabled={member.disabled}>
@@ -108,15 +111,8 @@ function Row(props: { member: Member; self: boolean; onChange: (member: Member) 
           onChange={(role) => update({ role })}
         />
       </div>
-      <div className={styles.memberActions}>
-        <button
-          type="button"
-          className={form.secondary}
-          onClick={() => run(async () => setReset(await api.resetLink(member.id)))}
-        >
-          Enlace para restablecer contraseña
-        </button>
-        {!props.self && (
+      {!props.self && (
+        <div className={styles.memberActions}>
           <button
             type="button"
             className={member.disabled ? form.secondary : form.danger}
@@ -124,22 +120,12 @@ function Row(props: { member: Member; self: boolean; onChange: (member: Member) 
           >
             {member.disabled ? "Activar" : "Desactivar"}
           </button>
-        )}
-      </div>
+        </div>
+      )}
       {failed && (
         <p className={form.error} role="alert">
           No se pudo completar la acción.
         </p>
-      )}
-      {reset && (
-        <>
-          <CopyLink
-            id={`reset-${member.id}`}
-            label="Enlace para restablecer"
-            value={`${location.origin}${reset.path}`}
-          />
-          <p className={styles.hint}>{expiry(reset)}</p>
-        </>
       )}
     </li>
   );
@@ -154,13 +140,14 @@ export function MembersSection(props: { selfId: string }) {
 
   const replace = (next: Member) =>
     setMembers((all) => all?.map((member) => (member.id === next.id ? next : member)) ?? null);
+  const append = (next: Member) => setMembers((all) => [...(all ?? []), next]);
 
   return (
     <section className={styles.section} aria-labelledby="members-heading">
       <h3 id="members-heading" className={styles.heading}>
         Miembros
       </h3>
-      <Invite />
+      <AddMember onAdded={append} />
       <ul className={styles.members} aria-label="Miembros">
         {members?.map((member) => (
           <Row key={member.id} member={member} self={member.id === props.selfId} onChange={replace} />

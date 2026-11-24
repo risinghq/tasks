@@ -54,7 +54,7 @@ export function TokensSection() {
       <p className={styles.hint}>
         Un token deja que un script lea y añada tarjetas a tu tablero con <code>Authorization: Bearer</code>.
       </p>
-      <form className={styles.inviteRow} onSubmit={create}>
+      <form className={styles.addRow} onSubmit={create}>
         <input
           className={form.input}
           aria-label="Nombre del token"

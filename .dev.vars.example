@@ -1,1 +1,3 @@
 SESSION_SECRET=dev-only-session-secret-change-me-0123456789
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=

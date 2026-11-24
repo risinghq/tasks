@@ -8,6 +8,8 @@ export default defineConfig(async () => ({
       miniflare: {
         bindings: {
           SESSION_SECRET: "secreto-de-prueba-secreto-de-prueba",
+          GOOGLE_CLIENT_ID: "cliente-de-prueba.apps.googleusercontent.com",
+          GOOGLE_CLIENT_SECRET: "secreto-de-google-de-prueba",
           MIGRATIONS: await readD1Migrations("./drizzle"),
         },
       },

@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm";
 import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
 import type { Db } from "./db/client";
 import { loginAttempts } from "./db/schema";
-import { nowSeconds } from "./links";
+import { nowSeconds } from "./clock";
 
 export const MAX_ATTEMPTS = 5;
 export const WINDOW_SECONDS = 15 * 60;
