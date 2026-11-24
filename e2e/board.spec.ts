@@ -394,26 +394,27 @@ test("the filter hides cards and a reload keeps it", async ({ page, tasks }) => 
 
   await page.getByRole("button", { name: "Filtrar" }).click();
   await page.getByRole("textbox", { name: "Texto" }).fill("informe");
+  await expect(page.getByText("2 tarjetas", { exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "Filtrar" })).toBeFocused();
 
   await expect(tasks.card("Informe mensual")).toBeVisible();
   await expect(tasks.card("Revisar correo")).toBeVisible();
   await expect(tasks.card("Curso de SQL")).toBeHidden();
-  await expect(page.getByText("2 tarjetas coinciden")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Filtrar" })).toContainText("1");
 
   await page.reload();
   await expect(tasks.card("Curso de SQL")).toBeHidden();
   await expect(tasks.card("Informe mensual")).toBeVisible();
 
+  await page.getByRole("button", { name: "Filtrar" }).click();
   await page.getByRole("button", { name: "Limpiar filtro" }).click();
+  await page.keyboard.press("Escape");
   await expect(tasks.card("Curso de SQL")).toBeVisible();
 });
 
 test.describe("labels", () => {
-  test("clicking a stripe turns every stripe into a named label, and a reload keeps it", async ({
-    page,
-    tasks,
-  }) => {
+  test("a card shows its label as a colored dot and its name", async ({ tasks }) => {
     await tasks.seed([
       { title: "Uno", list: "en_curso", label: { name: "Desarrollo", color: "green" } },
       { title: "Dos", list: "pendiente", label: { name: "Cursos", color: "purple" } },
@@ -421,29 +422,21 @@ test.describe("labels", () => {
     ]);
     await tasks.open();
 
-    await expect(tasks.card("Uno")).not.toContainText("Desarrollo");
+    const label = tasks.card("Uno").locator("[data-label]");
+    await expect(label).toHaveCount(1);
+    await expect(label).toContainText("Desarrollo");
+    await expect(tasks.card("Dos")).toContainText("Cursos");
     await expect(tasks.card("Tres").locator("[data-label]")).toHaveCount(0);
-    await tasks
-      .card("Uno")
-      .getByRole("button", { name: /^Etiqueta Desarrollo/ })
-      .click();
-    await expect(tasks.card("Uno")).toContainText("Desarrollo");
-    await expect(tasks.card("Dos")).toContainText("Cursos");
-    await expect(dialog(page)).toBeHidden();
-
-    await page.reload();
-    await expect(tasks.card("Dos")).toContainText("Cursos");
-    await tasks
-      .card("Dos")
-      .getByRole("button", { name: /^Etiqueta Cursos/ })
-      .click();
-    await expect(tasks.card("Dos")).not.toContainText("Cursos");
+    await expect(label.locator("span").first()).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   });
 
-  test("a label made and picked on the card back shows its stripe on the board", async ({ page, tasks }) => {
+  test("a label made and picked on the card back shows its dot and name on the board", async ({
+    page,
+    tasks,
+  }) => {
     await tasks.seed([{ title: "Sin color", list: "en_curso" }]);
     await tasks.open();
-    const stripe = tasks.card("Sin color").locator("[data-label]");
+    const stripe = tasks.card("Sin color").locator("[data-label] > span:first-child");
     await expect(stripe).toHaveCount(0);
 
     await tasks.card("Sin color").click();
@@ -459,7 +452,7 @@ test.describe("labels", () => {
     const red: string = await page.evaluate(`getComputedStyle(
       [...document.querySelectorAll("[data-card-id]")]
         .find((card) => card.textContent.includes("Sin color"))
-        .querySelector("[data-label]")
+        .querySelector("[data-label] > span:first-child")
     ).backgroundColor`);
     // Closing the card back goes one step back in history; a reload must not cut that short.
     await expect(page).toHaveURL(/\/$/);
@@ -507,15 +500,22 @@ test.describe("labels", () => {
     ]);
     await tasks.open();
 
+    const etiqueta = page.getByRole("button", { name: "Etiqueta" });
     await page.getByRole("button", { name: "Filtrar" }).click();
-    await page.getByRole("combobox", { name: "Etiqueta" }).selectOption({ label: "Cursos" });
+    await etiqueta.click();
+    await page.getByRole("option", { name: "Cursos" }).click();
     await expect(tasks.card("Morada uno")).toBeVisible();
     await expect(tasks.card("Verde uno")).toBeHidden();
     await expect(tasks.card("Libre uno")).toBeHidden();
 
-    await page.getByRole("combobox", { name: "Etiqueta" }).selectOption({ label: "Sin etiqueta" });
+    await etiqueta.click();
+    await page.getByRole("option", { name: "Sin etiqueta" }).click();
     await expect(tasks.card("Libre uno")).toBeVisible();
     await expect(tasks.card("Morada uno")).toBeHidden();
+
+    await page.getByRole("button", { name: "Limpiar filtro" }).click();
+    await expect(tasks.card("Verde uno")).toBeVisible();
+    await expect(tasks.card("Morada uno")).toBeVisible();
   });
 });
 
