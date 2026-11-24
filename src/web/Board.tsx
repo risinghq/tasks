@@ -1,5 +1,5 @@
 import { DndContext, DragOverlay } from "@dnd-kit/core";
-import { Filter as FilterIcon, X } from "lucide-react";
+import { ChartLine, Filter as FilterIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { LISTS, LIST_TITLES, type ListId } from "../shared/model";
 import styles from "./Board.module.css";
@@ -15,12 +15,12 @@ import { ShortcutsDialog } from "./ShortcutsDialog";
 import { Toasts } from "./Toasts";
 import { UiContext, type Ui } from "./ui";
 import { UserMenu } from "./UserMenu";
+import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { useBoard } from "./useBoard";
 import { useCardRoute } from "./useCardRoute";
 import { dragAnnouncements, useCardDrag } from "./useCardDrag";
 import { matches, useFilter } from "./useFilter";
 import { useOpenDays } from "./useOpenDays";
-import { StripeNamesContext, useStripeNamesState } from "./useStripeNames";
 import { useAccount } from "./useAccount";
 import { useShortcuts } from "./useShortcuts";
 
@@ -30,7 +30,6 @@ export function Board() {
   const board = useBoard();
   const route = useCardRoute();
   const { filter, active: filtering, set: setFilter, clear: clearFilter } = useFilter();
-  const stripeNames = useStripeNamesState();
   const days = useOpenDays(board.today);
 
   const [composer, setComposer] = useState<string | null>(null);
@@ -42,7 +41,9 @@ export function Board() {
   const { me, setMe, workspace, renameWorkspace, switchWorkspace, shownName } = useAccount();
   // The narrow layout shows one list at a time.
   const [tab, setTab] = useState<ListId>("en_curso");
-  const filterButton = useRef<HTMLButtonElement>(null);
+  const filterWide = useRef<HTMLButtonElement>(null);
+  const filterIcon = useRef<HTMLButtonElement>(null);
+  const [filterAnchor, setFilterAnchor] = useState<HTMLElement | null>(null);
 
   const shown = useMemo(() => board.cards.filter((card) => matches(card, filter)), [board.cards, filter]);
   const drag = useCardDrag(shown, board.move);
@@ -107,180 +108,206 @@ export function Board() {
     document.documentElement.dataset.dragging = String(drag.dragging !== null);
   }, [drag.dragging]);
 
+  /** The keyboard 'f' opens the filter anchored to whichever button is showing. */
+  const openFilter = (from?: HTMLElement | null) => {
+    setFilterAnchor(from ?? (filterWide.current?.offsetParent ? filterWide.current : filterIcon.current));
+    setFilterOpen(true);
+  };
+
   const modalOpen =
     Boolean(route.id) || quick !== null || settingsOpen || newWorkspaceOpen || helpOpen || filterOpen;
   const pointer = useShortcuts(modalOpen, {
     composer: setComposer,
     quickEdit,
-    filter: () => setFilterOpen(true),
+    filter: () => openFilter(),
     clearFilter,
     help: () => setHelpOpen(true),
   });
 
   const dragged = drag.dragging && drag.cards.find((card) => card.id === drag.dragging?.id);
   const shared = { cards: drag.cards, dragging: drag.dragging !== null, filtering, current: tab };
+  const criteria = [filter.q, filter.label, filter.requester].filter(Boolean).length;
+  const workspaceName =
+    me?.workspaces.find((w) => w.id === workspace?.id)?.name ?? workspace?.name ?? "Espacio";
+  const reportUrl = workspace ? `/r/${workspace.reportToken}` : null;
+  const openCount = board.cards.filter((card) => card.list !== "hecho").length;
 
   return (
-    <StripeNamesContext.Provider value={stripeNames}>
-      <UiContext.Provider value={ui}>
-        <div className={styles.page} {...pointer}>
-          <header className={styles.header}>
-            <div className={styles.tools}>
-              <h1 className={styles.title}>Tareas</h1>
-              <button
-                ref={filterButton}
-                type="button"
-                className={styles.tool}
-                data-active={filtering}
-                aria-haspopup="dialog"
-                onClick={() => setFilterOpen(!filterOpen)}
-              >
-                <FilterIcon size={16} aria-hidden /> Filtrar
-              </button>
-              {filtering && (
-                <span className={styles.matches} role="status">
-                  {shown.length} {shown.length === 1 ? "tarjeta coincide" : "tarjetas coinciden"}
-                  <button
-                    type="button"
-                    className={styles.clear}
-                    aria-label="Limpiar filtro"
-                    onClick={clearFilter}
-                  >
-                    <X size={16} aria-hidden />
-                  </button>
-                </span>
-              )}
-            </div>
+    <UiContext.Provider value={ui}>
+      <div className={styles.page} {...pointer}>
+        <header className={styles.header}>
+          <div className={styles.left}>
+            <h1 className={styles.title}>
+              <WorkspaceSwitcher
+                workspaces={me?.workspaces ?? []}
+                currentId={workspace?.id ?? null}
+                name={workspaceName}
+                openCount={openCount}
+                reportUrl={reportUrl}
+                onSwitch={switchWorkspace}
+                onNewWorkspace={() => setNewWorkspaceOpen(true)}
+              />
+            </h1>
+            <span className={styles.divider} aria-hidden />
+            <button
+              ref={filterWide}
+              type="button"
+              className={styles.filter}
+              data-active={filtering}
+              aria-haspopup="dialog"
+              aria-expanded={filterOpen}
+              onClick={(event) => (filterOpen ? setFilterOpen(false) : openFilter(event.currentTarget))}
+            >
+              <FilterIcon size={16} aria-hidden /> Filtrar
+              {criteria > 0 && <span className={styles.filterCount}>{criteria}</span>}
+            </button>
+          </div>
+          <div className={styles.actions}>
+            {reportUrl && (
+              <a href={reportUrl} className={styles.report}>
+                <ChartLine size={16} aria-hidden /> Informe semanal
+              </a>
+            )}
+            <button
+              ref={filterIcon}
+              type="button"
+              className={styles.filterIcon}
+              aria-label="Filtrar"
+              aria-haspopup="dialog"
+              aria-expanded={filterOpen}
+              onClick={(event) => (filterOpen ? setFilterOpen(false) : openFilter(event.currentTarget))}
+            >
+              <FilterIcon size={16} aria-hidden />
+              {criteria > 0 && <span className={styles.filterDot} aria-hidden />}
+            </button>
             <UserMenu
               name={shownName}
-              workspaces={me?.workspaces ?? []}
-              currentId={workspace?.id ?? null}
-              onSwitch={switchWorkspace}
-              onNewWorkspace={() => setNewWorkspaceOpen(true)}
+              email={me?.email ?? null}
               onSettings={() => setSettingsOpen(true)}
               onShortcuts={() => setHelpOpen(true)}
             />
-          </header>
+          </div>
+        </header>
 
-          <nav className={styles.tabs} role="tablist" aria-label="Listas">
-            {LISTS.map((list) => (
-              <button
-                key={list}
-                type="button"
-                role="tab"
-                id={`tab-${list}`}
-                className={styles.tab}
-                aria-selected={tab === list}
-                aria-controls={`list-${list}`}
-                onClick={() => setTab(list)}
-              >
-                {LIST_TITLES[list]}
-                <span className={styles.tabCount}>
-                  {drag.cards.filter((card) => card.list === list).length}
-                </span>
-              </button>
-            ))}
-          </nav>
-
-          {board.loadError && (
-            <div className={styles.error} role="alert">
-              No se pudo cargar el tablero.
-              <button type="button" onClick={() => location.reload()}>
-                Recargar
-              </button>
-            </div>
-          )}
-
-          {board.ready && (
-            <DndContext
-              sensors={drag.sensors}
-              collisionDetection={drag.collisionDetection}
-              accessibility={dragAnnouncements}
-              onDragStart={drag.onDragStart}
-              onDragOver={drag.onDragOver}
-              onDragEnd={drag.onDragEnd}
-              onDragCancel={drag.onDragCancel}
+        <nav className={styles.tabs} role="tablist" aria-label="Listas">
+          {LISTS.map((list) => (
+            <button
+              key={list}
+              type="button"
+              role="tab"
+              id={`tab-${list}`}
+              className={styles.tab}
+              aria-selected={tab === list}
+              aria-controls={`list-${list}`}
+              onClick={() => setTab(list)}
             >
-              <main className={styles.lists}>
-                <FlatColumn {...shared} list="pendiente" />
-                <FlatColumn {...shared} list="esta_semana" />
-                <FlatColumn {...shared} list="en_curso" />
-                <DoneColumn
-                  {...shared}
-                  today={board.today}
-                  days={days}
-                  hasOlder={board.olderWeek !== null}
-                  onLoadOlder={board.loadOlder}
-                />
-              </main>
-              <DragOverlay dropAnimation={reducedMotion() ? null : { duration: 150, easing: "ease-out" }}>
-                {dragged ? <CardFace card={dragged} lifted /> : null}
-              </DragOverlay>
-            </DndContext>
-          )}
-        </div>
+              {LIST_TITLES[list]}
+              <span className={styles.tabCount}>
+                {drag.cards.filter((card) => card.list === list).length}
+              </span>
+            </button>
+          ))}
+        </nav>
 
-        {openCard && (
-          <CardBack
-            key={openCard.id}
-            card={openCard}
-            today={board.today}
-            requesters={board.requesters}
-            actions={{
-              edit: (fields) => board.edit(openCard.id, fields),
-              move: (to) => board.move(openCard.id, to, null),
-              remove: () => board.remove(openCard.id),
-              toggleDone: () => toggleDone(openCard.id),
-            }}
-            onClose={route.close}
-          />
+        {board.loadError && (
+          <div className={styles.error} role="alert">
+            No se pudo cargar el tablero.
+            <button type="button" onClick={() => location.reload()}>
+              Recargar
+            </button>
+          </div>
         )}
 
-        {quick && quickCard && (
-          <QuickEdit
-            key={quick.id}
-            card={quickCard}
-            rect={quick.rect}
-            today={board.today}
-            requesters={board.requesters}
-            actions={{
-              edit: (fields) => board.edit(quickCard.id, fields),
-              move: (to) => board.move(quickCard.id, to, null),
-            }}
-            onOpenCard={() => route.open(quickCard.id)}
-            onDelete={() => {
-              board.remove(quickCard.id);
-              setQuick(null);
-            }}
-            onClose={() => setQuick(null)}
-          />
+        {board.ready && (
+          <DndContext
+            sensors={drag.sensors}
+            collisionDetection={drag.collisionDetection}
+            accessibility={dragAnnouncements}
+            onDragStart={drag.onDragStart}
+            onDragOver={drag.onDragOver}
+            onDragEnd={drag.onDragEnd}
+            onDragCancel={drag.onDragCancel}
+          >
+            <main className={styles.lists}>
+              <FlatColumn {...shared} list="pendiente" />
+              <FlatColumn {...shared} list="esta_semana" />
+              <FlatColumn {...shared} list="en_curso" />
+              <DoneColumn
+                {...shared}
+                today={board.today}
+                days={days}
+                hasOlder={board.olderWeek !== null}
+                onLoadOlder={board.loadOlder}
+              />
+            </main>
+            <DragOverlay dropAnimation={reducedMotion() ? null : { duration: 150, easing: "ease-out" }}>
+              {dragged ? <CardFace card={dragged} lifted /> : null}
+            </DragOverlay>
+          </DndContext>
         )}
+      </div>
 
-        {filterOpen && filterButton.current && (
-          <FilterPopover
-            anchor={filterButton.current}
-            filter={filter}
-            labels={board.labels}
-            requesters={board.requesters}
-            onChange={setFilter}
-            onClear={clearFilter}
-            onClose={() => setFilterOpen(false)}
-          />
-        )}
+      {openCard && (
+        <CardBack
+          key={openCard.id}
+          card={openCard}
+          today={board.today}
+          requesters={board.requesters}
+          actions={{
+            edit: (fields) => board.edit(openCard.id, fields),
+            move: (to) => board.move(openCard.id, to, null),
+            remove: () => board.remove(openCard.id),
+            toggleDone: () => toggleDone(openCard.id),
+          }}
+          onClose={route.close}
+        />
+      )}
 
-        {settingsOpen && me && workspace && (
-          <SettingsDialog
-            me={me}
-            workspace={workspace}
-            onMe={setMe}
-            onWorkspace={renameWorkspace}
-            onClose={() => setSettingsOpen(false)}
-          />
-        )}
-        {newWorkspaceOpen && <NewWorkspaceDialog onClose={() => setNewWorkspaceOpen(false)} />}
-        {helpOpen && <ShortcutsDialog onClose={() => setHelpOpen(false)} />}
-        <Toasts toasts={board.toasts} onClose={board.closeToast} />
-      </UiContext.Provider>
-    </StripeNamesContext.Provider>
+      {quick && quickCard && (
+        <QuickEdit
+          key={quick.id}
+          card={quickCard}
+          rect={quick.rect}
+          today={board.today}
+          requesters={board.requesters}
+          actions={{
+            edit: (fields) => board.edit(quickCard.id, fields),
+            move: (to) => board.move(quickCard.id, to, null),
+          }}
+          onOpenCard={() => route.open(quickCard.id)}
+          onDelete={() => {
+            board.remove(quickCard.id);
+            setQuick(null);
+          }}
+          onClose={() => setQuick(null)}
+        />
+      )}
+
+      {filterOpen && filterAnchor && (
+        <FilterPopover
+          anchor={filterAnchor}
+          filter={filter}
+          matches={shown.length}
+          labels={board.labels}
+          requesters={board.requesters}
+          onChange={setFilter}
+          onClear={clearFilter}
+          onClose={() => setFilterOpen(false)}
+        />
+      )}
+
+      {settingsOpen && me && workspace && (
+        <SettingsDialog
+          me={me}
+          workspace={workspace}
+          onMe={setMe}
+          onWorkspace={renameWorkspace}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
+      {newWorkspaceOpen && <NewWorkspaceDialog onClose={() => setNewWorkspaceOpen(false)} />}
+      {helpOpen && <ShortcutsDialog onClose={() => setHelpOpen(false)} />}
+      <Toasts toasts={board.toasts} onClose={board.closeToast} />
+    </UiContext.Provider>
   );
 }

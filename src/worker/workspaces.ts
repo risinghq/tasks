@@ -3,7 +3,7 @@ import type { Member, Workspace, WorkspaceRole } from "../shared/model";
 import { nowSeconds } from "./clock";
 import { randomToken } from "./crypto";
 import { batch, isUniqueViolation, type Db } from "./db/client";
-import { users, workspaceMembers, workspaces } from "./db/schema";
+import { cards, users, workspaceMembers, workspaces } from "./db/schema";
 
 /**
  * A user's personal workspace has the user's own id, so a default board needs
@@ -30,10 +30,15 @@ export async function createPersonalWorkspace(
 const shownName = (userId: string) =>
   sql<string>`case when ${workspaces.id} = ${userId} then ${workspaces.name} else coalesce(${users.name}, ${workspaces.name}) end`;
 
-/** Every workspace the user belongs to. Their personal one comes first. */
-export function workspacesOf(db: Db, userId: string): Promise<Workspace[]> {
+/** Every workspace the user belongs to, with its open-card count. Their personal one comes first. */
+export function workspacesOf(db: Db, userId: string): Promise<(Workspace & { openCount: number })[]> {
   return db
-    .select({ id: workspaces.id, name: shownName(userId), role: workspaceMembers.role })
+    .select({
+      id: workspaces.id,
+      name: shownName(userId),
+      role: workspaceMembers.role,
+      openCount: sql<number>`(select count(*) from ${cards} where ${cards.workspaceId} = ${workspaces.id} and ${cards.list} <> 'hecho')`,
+    })
     .from(workspaceMembers)
     .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
     .leftJoin(users, eq(users.id, workspaces.id))

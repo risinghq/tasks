@@ -164,7 +164,7 @@ describe("signing in with Google", () => {
     const me = clientFor(sessionOf(res)!.split(";")[0]!);
     const profile = await me.me();
     expect(profile).toMatchObject({ email: "nueva@example.com", name: "Nueva Persona" });
-    expect(profile.workspaces).toEqual([{ id: profile.id, name: "Personal", role: "owner" }]);
+    expect(profile.workspaces).toEqual([{ id: profile.id, name: "Personal", role: "owner", openCount: 0 }]);
     expect(await me.board()).toMatchObject({ cards: [], labels: [] });
   });
 

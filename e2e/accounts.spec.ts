@@ -1,4 +1,4 @@
-import { chooseFromMenu, expect, signInAs, test } from "./fixtures";
+import { chooseFromMenu, chooseWorkspace, expect, signInAs, switcher, test } from "./fixtures";
 
 test("an owner adds a member, who sees the shared board and keeps a personal one", async ({
   page,
@@ -36,11 +36,11 @@ test("an owner adds a member, who sees the shared board and keeps a personal one
   await theirs.goto("/");
 
   // Their own board starts empty.
-  await expect(theirs.getByRole("heading", { name: "Tareas" })).toBeVisible();
+  await expect(theirs.getByRole("heading", { level: 1 })).toBeVisible();
   await expect(theirs.locator("[data-card-id]")).toHaveCount(0);
 
-  // The owner's board is one menu item away, and its owner's name tells it apart.
-  await chooseFromMenu(theirs, "Dev", "menuitemradio");
+  // The owner's board is one switcher item away, and its owner's name tells it apart.
+  await chooseWorkspace(theirs, "Dev");
   await expect(theirs.locator("[data-card-id]", { hasText: "Del propietario" })).toBeVisible();
 
   await chooseFromMenu(theirs, "Ajustes");
@@ -56,29 +56,53 @@ test("a user makes a workspace for a company and its board is separate", async (
   await tasks.seed([{ title: "Personal", list: "en_curso" }]);
   await tasks.open();
 
-  await chooseFromMenu(page, "Espacio nuevo");
+  await switcher(page).click();
+  await page.getByRole("menuitem", { name: "Espacio nuevo" }).click();
   const dialog = page.getByRole("dialog", { name: "Espacio nuevo" });
   await dialog.getByLabel("Nombre").fill("Empresa A");
   await dialog.getByRole("button", { name: "Crear espacio" }).click();
 
-  // Switching reloads the page. Wait for the new menu before the next step.
-  const menu = page.locator("header [aria-haspopup='menu']");
+  // Switching reloads the page. Wait for the new switcher before the next step.
+  const menu = switcher(page);
   await expect(menu).toContainText("Empresa A");
   await expect(page.locator("[data-card-id]")).toHaveCount(0);
 
   // Back to the personal one.
-  await chooseFromMenu(page, "Personal", "menuitemradio");
+  await chooseWorkspace(page, "Personal");
   await expect(menu).not.toContainText("Empresa A");
   await expect(tasks.card("Personal")).toBeVisible();
 
   // Clean up so the next run starts from the same state.
-  await chooseFromMenu(page, "Empresa A", "menuitemradio");
+  await chooseWorkspace(page, "Empresa A");
   await expect(menu).toContainText("Empresa A");
   await chooseFromMenu(page, "Ajustes");
   const settings = page.getByRole("dialog", { name: "Ajustes" });
   await settings.getByRole("button", { name: "Borrar espacio" }).click();
   await settings.getByRole("button", { name: "Sí, borrar" }).click();
   await expect(menu).not.toContainText("Empresa A");
+});
+
+test("the workspace switcher lists the spaces with their open counts", async ({ page, tasks }) => {
+  await tasks.seed([
+    { title: "Abierta", list: "en_curso" },
+    { title: "Cerrada", list: "hecho", doneDate: "2026-11-24" },
+  ]);
+  await tasks.open();
+
+  await switcher(page).click();
+  const sheet = page.getByRole("dialog", { name: "Espacios" });
+  const personal = sheet.getByRole("radio", { name: /Personal/ });
+  await expect(personal).toHaveAttribute("aria-checked", "true");
+  await expect(personal).toContainText("1 abierta");
+  await expect(page.getByRole("link", { name: "Informe semanal" })).toHaveAttribute("href", /^\/r\//);
+  await expect(sheet.getByRole("menuitem", { name: "Informe semanal de Personal" })).toHaveAttribute(
+    "href",
+    /^\/r\//,
+  );
+  await expect(sheet.getByRole("menuitem", { name: "Espacio nuevo" })).toBeVisible();
+
+  await page.keyboard.press("Escape");
+  await expect(switcher(page)).toBeFocused();
 });
 
 test("the login page offers Google", async ({ browser }, testInfo) => {

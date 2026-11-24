@@ -78,7 +78,12 @@ export type DoneWeek = {
 export type Workspace = { id: string; name: string; role: WorkspaceRole };
 
 /** The signed-in user and every workspace they belong to, oldest first. The first is their default. */
-export type Me = { id: string; name: string; email: string; workspaces: Workspace[] };
+export type Me = {
+  id: string;
+  name: string;
+  email: string;
+  workspaces: (Workspace & { openCount: number })[];
+};
 
 /** What Ajustes shows about the current workspace. */
 export type WorkspaceSettings = Workspace & { reportToken: string };

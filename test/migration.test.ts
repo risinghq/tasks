@@ -72,7 +72,9 @@ describe("the accounts migration on a database with data", () => {
         "SELECT workspace_id, user_id, role FROM workspace_members",
       ).all();
       expect(membership.results).toEqual([{ workspace_id: FIRST_USER, user_id: FIRST_USER, role: "owner" }]);
-      expect((await me.me()).workspaces).toEqual([{ id: FIRST_USER, name: "Personal", role: "owner" }]);
+      expect((await me.me()).workspaces).toEqual([
+        { id: FIRST_USER, name: "Personal", role: "owner", openCount: 5 },
+      ]);
 
       const { cards, labels } = await me.board();
       const labelName = (id: string | null) => labels.find((label) => label.id === id)?.name ?? null;

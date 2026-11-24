@@ -83,7 +83,7 @@ export const test = base.extend<{ tasks: Tasks }>({
       },
       async open(path = "/") {
         await page.goto(path);
-        await expect(page.getByRole("heading", { name: "Tareas" })).toBeVisible();
+        await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
         await expect(page.getByRole("region", { name: "En curso" })).toBeVisible();
       },
       card: (title) => page.locator("[data-card-id]", { hasText: title }),
@@ -97,10 +97,20 @@ export { expect };
 export async function chooseFromMenu(
   page: Page,
   item: string,
-  role: "menuitem" | "menuitemradio" = "menuitem",
+  role: "menuitem" | "menuitemradio" | "radio" = "menuitem",
 ) {
   await page.locator("header [aria-haspopup='menu']").click();
   await page.getByRole(role, { name: item }).click();
+}
+
+/** The workspace the header switcher shows. */
+export function switcher(page: Page) {
+  return page.getByRole("heading", { level: 1 }).getByRole("button");
+}
+
+export async function chooseWorkspace(page: Page, name: string) {
+  await switcher(page).click();
+  await page.getByRole("radio", { name }).click();
 }
 
 /**
