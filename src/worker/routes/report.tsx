@@ -1,8 +1,10 @@
 /** @jsxImportSource hono/jsx */
+import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { limaDate, parseWeek, weekDays, weekOf } from "../../shared/dates";
 import { cardsOf } from "../cards";
 import { connect } from "../db/client";
+import { workspaces } from "../db/schema";
 import { labelsOf } from "../labels";
 import { workspaceByReportToken } from "../workspaces";
 import { ReportPage } from "../views/report";
@@ -30,18 +32,24 @@ report.get("/:token", async (c) => {
   const days = weekDays(week)
     .map((date) => ({ date, cards: done.filter((card) => card.doneDate === date) }))
     .filter((day) => day.cards.length > 0);
-  const active =
-    week === currentWeek ? (await cards.pendingAndActive()).filter((card) => card.list === "en_curso") : null;
+  const open = week === currentWeek ? await cards.pendingAndActive() : null;
+  // workspaceByReportToken names a personal workspace after its owner; the
+  // report header shows the workspace's own name.
+  const name =
+    (await db.select({ name: workspaces.name }).from(workspaces).where(eq(workspaces.id, workspace.id)).get())
+      ?.name ?? workspace.name;
+  const url = new URL(c.req.url);
 
   return c.html(
     <ReportPage
       token={c.req.param("token")}
       week={week}
       currentWeek={currentWeek}
-      workspaceName={workspace.name}
+      workspaceName={name}
       today={today}
+      url={url.host + url.pathname + url.search}
       days={days}
-      active={active}
+      open={open}
       labels={await labelsOf(db, workspace.id).list()}
     />,
   );

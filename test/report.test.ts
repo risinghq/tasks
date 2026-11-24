@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { admin, member, MEMBER, send, setNow } from "./helpers";
+import { admin, member, send, setNow } from "./helpers";
 
 const FRIDAY = "2026-10-16T17:00:00Z";
 
@@ -20,7 +20,16 @@ async function seeded() {
   await me.add("Sin etiqueta alguna", "hecho");
   const lastWeek = await me.add("Tarea de la semana pasada", "hecho");
   await me.edit(lastWeek.id, { doneDate: "2026-10-09" });
-  await me.add("Trabajo en marcha", "en_curso");
+  const marcha = await me.add("Trabajo en marcha", "en_curso");
+  await me.edit(marcha.id, {
+    labelId: development.id,
+    requester: "Luis",
+    checklist: [
+      { text: "Paso uno", done: true },
+      { text: "Paso dos", done: false },
+      { text: "Paso tres", done: false },
+    ],
+  });
   await me.add("Todavía pendiente", "pendiente");
   await me.add("Planeado para la semana", "esta_semana");
   const { reportToken } = await me.workspaceSettings();
@@ -39,52 +48,83 @@ describe("weekly report", () => {
     expect(await res.text()).toContain('name="robots" content="noindex');
   });
 
-  it("shows the week, the user, counts per label and each finished card", async () => {
+  it("names the workspace and the week, with a button that copies the link", async () => {
     const { token } = await seeded();
     const html = await (await report(token)).text();
 
-    expect(html).toContain("12 – 18 oct 2026");
-    expect(html).toContain("Ana Prueba");
-    expect(html).toMatch(/Cursos\s*1/);
-    expect(html).toMatch(/Desarrollo\s*1/);
-    expect(html).toMatch(/Sin etiqueta\s*1/);
-    expect(html.indexOf("Sin etiqueta 1")).toBeGreaterThan(html.indexOf("Desarrollo 1"));
+    expect(html).toContain(">P<");
+    expect(html).toContain(">Personal<");
+    expect(html).toContain("Informe semanal");
+    expect(html).toContain("Copiar enlace");
+    expect(html).toContain(`tasks.test/r/${token}`);
+    expect(html).toContain("Semana 42 · 12 – 18 oct 2026");
+  });
+
+  it("sums the week's totals and what passes to the next one", async () => {
+    const { token } = await seeded();
+    const html = await (await report(token)).text();
+
+    expect(html).toContain("3 tareas hechas esta semana.");
+    expect(html).toMatch(/num accent">3</);
+    expect(html).toMatch(/num">1</);
+    expect(html).toMatch(/num">2</);
+    expect(html).toContain("Hechas");
+    expect(html).toContain("En curso");
+    expect(html).toContain("Pasan a la próxima semana");
+  });
+
+  it("groups finished and in-progress cards under their label", async () => {
+    const { token } = await seeded();
+    const html = await (await report(token)).text();
+
+    expect(html).toContain("Desarrollo");
+    expect(html).toContain("Cursos");
+    expect(html).toContain("Sin etiqueta");
+    expect(html.indexOf(">Cursos<")).toBeLessThan(html.indexOf(">Desarrollo<"));
+    expect(html.indexOf(">Desarrollo<")).toBeLessThan(html.indexOf(">Sin etiqueta<"));
+    expect(html).toContain("1 hecha · 1 en curso");
+    expect(html).toMatch(/Cursos[^]*1 hecha/);
+
     expect(html).toContain("Publicar la API");
-    expect(html).toContain("Desarrollo · Augusto");
-    expect(html).toContain("Primera línea\nSegunda línea");
+    expect(html).toContain("Ayer");
+    expect(html).toContain("Hoy");
+    expect(html).toContain("Trabajo en marcha");
+    expect(html).toContain("En curso");
+    expect(html).toContain("Luis");
+    expect(html).toContain("1 de 3");
     expect(html).not.toContain("Tarea de la semana pasada");
     expect(html).not.toContain("Todavía pendiente");
-    expect(html).not.toContain("Planeado para la semana");
   });
 
-  it("lists days Monday to Sunday and only those with finished cards", async () => {
+  it("lists the cards that pass to the next week with their list", async () => {
     const { token } = await seeded();
     const html = await (await report(token)).text();
-    const yesterday = html.indexOf("Ayer, jueves 15 oct");
-    const today = html.indexOf("Hoy, viernes 16 oct");
-    expect(yesterday).toBeGreaterThan(-1);
-    expect(today).toBeGreaterThan(yesterday);
-    expect(html).not.toContain("sábado 17 oct");
-    expect(html).not.toContain("lunes 12 oct");
+
+    expect(html).toContain("Pasa a la próxima semana");
+    const carry = html.slice(html.indexOf("Pasa a la próxima semana"));
+    expect(carry).toContain("Planeado para la semana");
+    expect(carry).toContain("Esta semana");
+    expect(carry).toContain("Trabajo en marcha");
+    expect(carry).not.toContain("Todavía pendiente");
   });
 
-  it("shows En curso on the current week only", async () => {
+  it("shows the current state only on the current week", async () => {
     const { token } = await seeded();
-    const current = await (await report(token)).text();
-    expect(current).toContain("En curso");
-    expect(current).toContain("Trabajo en marcha");
-
     const previous = await (await report(token, "?semana=2026-W41")).text();
-    expect(previous).not.toContain("Trabajo en marcha");
-    expect(previous).toContain("Tarea de la semana pasada");
+
     expect(previous).toContain("5 – 11 oct 2026");
+    expect(previous).toContain("1 tarea hecha esa semana.");
+    expect(previous).toContain("Tarea de la semana pasada");
+    expect(previous).not.toContain("Trabajo en marcha");
+    expect(previous).not.toContain("Pasan a la próxima semana");
+    expect(previous).not.toContain("Pasa a la próxima semana");
   });
 
   it("links to the previous and next week", async () => {
     const { token } = await seeded();
     const current = await (await report(token)).text();
     expect(current).toContain(`/r/${token}?semana=2026-W41`);
-    expect(current).not.toContain("Semana siguiente");
+    expect(current).not.toContain(`?semana=2026-W43`);
 
     const previous = await (await report(token, "?semana=2026-W41")).text();
     expect(previous).toContain(`/r/${token}?semana=2026-W42`);
@@ -104,7 +144,7 @@ describe("weekly report", () => {
     expect(res.headers.get("X-Robots-Tag")).toContain("noindex");
   });
 
-  it("shows each user only their own cards, under their own name", async () => {
+  it("shows each workspace only its own cards", async () => {
     const { token } = await seeded();
     const beto = await member();
     await beto.add("Tarea de Beto", "en_curso");
@@ -112,15 +152,12 @@ describe("weekly report", () => {
     await beto.edit(done.id, { description: "solo de Beto" });
 
     const mine = await (await report(token)).text();
-    expect(mine).toContain("Ana Prueba");
     expect(mine).not.toContain("Beto");
 
     const theirs = await (await report((await beto.workspaceSettings()).reportToken)).text();
-    expect(theirs).toContain(MEMBER.name);
     expect(theirs).toContain("Terminada por Beto");
     expect(theirs).toContain("Tarea de Beto");
     expect(theirs).not.toContain("Publicar la API");
-    expect(theirs).not.toContain("Ana Prueba");
     expect(theirs).not.toContain("Desarrollo");
   });
 });
