@@ -61,7 +61,10 @@
   /* Radius */
   --radius-sm: 4px;
   --radius-md: 8px;
+  --radius-card: 10px;
   --radius-lg: 12px;
+  --radius-list: 14px;
+  --radius-overlay: 16px;
   --radius-full: 9999px;
 
   --control: 2.5rem;
@@ -90,12 +93,12 @@
   --hue: 255;
 
   /* Neutral. Chroma 0.005 to 0.02. Light first, dark second. */
-  --neutral-1: light-dark(oklch(0.995 0.003 var(--hue)), oklch(0.185 0.012 var(--hue)));
-  --neutral-2: light-dark(oklch(0.978 0.007 var(--hue)), oklch(0.22 0.013 var(--hue)));
-  --neutral-3: light-dark(oklch(0.958 0.009 var(--hue)), oklch(0.255 0.014 var(--hue)));
-  --neutral-4: light-dark(oklch(0.938 0.01 var(--hue)), oklch(0.285 0.015 var(--hue)));
-  --neutral-5: light-dark(oklch(0.915 0.012 var(--hue)), oklch(0.315 0.016 var(--hue)));
-  --neutral-6: light-dark(oklch(0.885 0.013 var(--hue)), oklch(0.355 0.017 var(--hue)));
+  --neutral-1: light-dark(oklch(0.995 0.003 var(--hue)), oklch(0.165 0.012 var(--hue)));
+  --neutral-2: light-dark(oklch(0.978 0.007 var(--hue)), oklch(0.212 0.013 var(--hue)));
+  --neutral-3: light-dark(oklch(0.958 0.009 var(--hue)), oklch(0.262 0.014 var(--hue)));
+  --neutral-4: light-dark(oklch(0.938 0.01 var(--hue)), oklch(0.3 0.015 var(--hue)));
+  --neutral-5: light-dark(oklch(0.915 0.012 var(--hue)), oklch(0.33 0.016 var(--hue)));
+  --neutral-6: light-dark(oklch(0.885 0.013 var(--hue)), oklch(0.365 0.017 var(--hue)));
   --neutral-7: light-dark(oklch(0.845 0.015 var(--hue)), oklch(0.41 0.018 var(--hue)));
   --neutral-8: light-dark(oklch(0.76 0.017 var(--hue)), oklch(0.5 0.019 var(--hue)));
   --neutral-9: light-dark(oklch(0.56 0.018 var(--hue)), oklch(0.58 0.019 var(--hue)));
@@ -145,24 +148,29 @@
   --success-11: light-dark(oklch(0.46 0.12 153), oklch(0.78 0.14 156));
   --success-12: light-dark(oklch(0.3 0.06 153), oklch(0.92 0.05 158));
 
-  /* Text. Two neutral tones and the accent. */
+  /* Text. Three neutral tones and the accent. */
   --text: var(--neutral-12);
   --text-muted: var(--neutral-11);
+  --text-subtle: var(--neutral-10);
   --text-accent: var(--accent-11);
   --text-danger: var(--danger-11);
   --text-on-solid: oklch(0.985 0.008 var(--hue));
   --text-success: var(--success-11);
 
-  /* Surfaces. A higher one is lighter in the dark theme. */
-  --board: light-dark(var(--accent-5), var(--accent-1));
-  --list: light-dark(var(--neutral-3), var(--neutral-2));
+  /* Surfaces. A higher one is lighter in both themes:
+     --board < --list < --card < --overlay. */
+  --board: light-dark(var(--neutral-3), var(--neutral-1));
+  --list: var(--neutral-2);
   --card: light-dark(var(--neutral-1), var(--neutral-3));
   --card-hover: light-dark(var(--neutral-2), var(--neutral-4));
-  --overlay: light-dark(var(--neutral-1), var(--neutral-4));
-  --field-background: light-dark(var(--neutral-1), var(--neutral-2));
+  --overlay: light-dark(oklch(0.999 0.001 var(--hue)), oklch(0.28 0.014 var(--hue)));
+  --field-background: light-dark(var(--neutral-4), oklch(0.15 0.006 var(--hue)));
   --border: var(--neutral-6);
   --border-control: var(--neutral-9);
   --focus: light-dark(var(--accent-9), var(--accent-11));
+  --focus-ring: light-dark(oklch(from var(--accent-9) l c h / 0.4), oklch(from var(--accent-11) l c h / 0.5));
+  --line: oklch(from var(--neutral-12) l c h / 0.08);
+  --line-strong: oklch(from var(--neutral-12) l c h / 0.23);
 
   /* Interaction. Alpha layers of the text colour work on every surface. */
   --hover: oklch(from var(--neutral-12) l c h / 0.08);
@@ -172,7 +180,7 @@
   --inverse: var(--neutral-12);
   --inverse-text: var(--neutral-1);
   --inverse-hover: oklch(from var(--neutral-1) l c h / 0.16);
-  --scrim: light-dark(oklch(0.2 0.03 var(--hue) / 0.5), oklch(0.1 0.02 var(--hue) / 0.55));
+  --scrim: light-dark(oklch(0.2 0.03 var(--hue) / 0.28), oklch(0 0 0 / 0.5));
 
   --accent: var(--accent-9);
   --accent-hover: light-dark(var(--accent-10), var(--accent-8));
@@ -197,19 +205,20 @@
   --label-blue-bg: light-dark(oklch(0.61 0.14 250), oklch(0.72 0.12 250));
   --label-blue-text: light-dark(oklch(0.16 0.04 255), oklch(0.22 0.07 255));
 
-  /* Depth. Light falls from above, so every layer offsets down by
-     half its blur. The colour is the surface hue, never black. */
-  --shadow-color: light-dark(oklch(0.3 0.04 var(--hue)), oklch(0.05 0.03 var(--hue)));
-  --shadow-ring: light-dark(oklch(0.3 0.04 var(--hue) / 0.1), oklch(0.95 0.01 var(--hue) / 0.1));
+  /* Depth. A hairline ring plus soft layers in the surface hue. */
+  --shadow-color: light-dark(oklch(0.15 0.02 var(--hue) / 0.05), oklch(0 0 0 / 0.28));
   --shadow-raised:
-    0 0 0 1px var(--shadow-ring), 0 1px 2px oklch(from var(--shadow-color) l c h / 0.14),
-    0 4px 8px -2px oklch(from var(--shadow-color) l c h / 0.08);
+    0 0 0 1px var(--line), 0 1px 1px var(--shadow-color), 0 2px 4px var(--shadow-color),
+    0 6px 12px -2px var(--shadow-color);
+  --shadow-raised-hover:
+    0 0 0 1px var(--line), 0 2px 4px var(--shadow-color), 0 4px 8px var(--shadow-color),
+    0 14px 28px -8px var(--shadow-color);
   --shadow-overlay:
-    0 0 0 1px var(--shadow-ring), 0 2px 4px oklch(from var(--shadow-color) l c h / 0.12),
-    0 12px 24px -6px oklch(from var(--shadow-color) l c h / 0.16);
+    0 0 0 1px var(--line), 0 4px 8px var(--shadow-color), 0 12px 24px -4px var(--shadow-color),
+    0 32px 64px -12px var(--shadow-color);
   --shadow-modal:
-    0 0 0 1px var(--shadow-ring), 0 4px 8px oklch(from var(--shadow-color) l c h / 0.1),
-    0 24px 48px -12px oklch(from var(--shadow-color) l c h / 0.24);
+    0 0 0 1px var(--line), 0 4px 8px var(--shadow-color), 0 24px 48px -12px var(--shadow-color),
+    0 48px 96px -24px var(--shadow-color);
 }
 
 /* A page title on a page of its own: 32px on a phone, 40px from tablet up. */
