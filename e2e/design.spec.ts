@@ -40,13 +40,13 @@ test.describe("themes", () => {
     await chooseFromMenu(page, "Oscuro", "menuitemradio");
     await expect.poll(() => isDark(page)).toBe(true);
     await page.reload();
-    await expect(page.getByRole("heading", { name: "Tareas" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     expect(await isDark(page)).toBe(true);
 
     await chooseFromMenu(page, "Sistema", "menuitemradio");
     await expect.poll(() => isDark(page)).toBe(false);
     await page.reload();
-    await expect(page.getByRole("heading", { name: "Tareas" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     expect(await isDark(page)).toBe(false);
   });
 });
