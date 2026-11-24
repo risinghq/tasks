@@ -1,11 +1,10 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { AlignLeft, Check, ListChecks, Pencil } from "lucide-react";
+import { AlignLeft, Check, Pencil } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 import { labelStyle, type Card } from "../shared/model";
 import styles from "./CardView.module.css";
 import { useUi } from "./ui";
-import { useStripeNames } from "./useStripeNames";
 
 /**
  * The card's completion control: a circle that shows on hover, or the green
@@ -20,7 +19,7 @@ export function Completion({
   size: "card" | "back";
   onToggle?: () => void;
 }) {
-  const icon = done ? <Check size={size === "card" ? 16 : 24} strokeWidth={3} aria-hidden /> : null;
+  const icon = done ? <Check size={size === "card" ? 10 : 24} strokeWidth={3} aria-hidden /> : null;
   if (!onToggle) {
     return done ? (
       <span className={styles.complete} data-done data-size={size}>
@@ -47,10 +46,13 @@ export function Completion({
   );
 }
 
-/**
- * The card as it looks on the board. `title` replaces the title text, for quick
- * edit. `onToggleDone` adds the completion circle.
- */
+/** A label as the board shows it: a colored dot and its name. */
+export function LabelDot({ color }: { color: Parameters<typeof labelStyle>[0] }) {
+  return <span className={styles.dot} style={{ background: labelStyle(color).background }} />;
+}
+
+/** The card as it looks on the board. `title` replaces the title text, for quick
+ * edit. `onToggleDone` adds the completion circle. */
 export function CardFace({
   card,
   title,
@@ -62,57 +64,51 @@ export function CardFace({
   lifted?: boolean;
   onToggleDone?: () => void;
 }) {
-  const stripeNames = useStripeNames();
   const { labels } = useUi();
   const label = labels.find((known) => known.id === card.labelId);
+  const total = card.checklist.length;
   const checked = card.checklist.filter((item) => item.done).length;
   const hasDescription = card.description.trim() !== "";
-  const hasBadges = card.requester || card.checklist.length > 0 || hasDescription;
+  const hasMeta = label || card.requester || total > 0 || hasDescription;
   const done = card.list === "hecho";
 
   return (
-    <div
-      className={styles.face}
-      data-lifted={lifted}
-      data-elevation={lifted ? "overlay" : "raised"}
-      style={
-        label
-          ? ({
-              "--stripe": labelStyle(label.color).background,
-              "--stripe-text": labelStyle(label.color).color,
-            } as CSSProperties)
-          : undefined
-      }
-    >
-      {label && (
-        <button
-          type="button"
-          className={stripeNames.expanded ? styles.pill : styles.stripe}
-          data-label={label.id}
-          title={label.name}
-          aria-label={`Etiqueta ${label.name}. Alternar nombre de las etiquetas`}
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={(event) => {
-            event.stopPropagation();
-            stripeNames.toggle();
-          }}
-          onKeyDown={(event) => event.stopPropagation()}
-        >
-          {stripeNames.expanded ? label.name : null}
-        </button>
-      )}
+    <div className={styles.face} data-lifted={lifted} data-elevation={lifted ? "overlay" : "raised"}>
       <div className={styles.titleRow} data-done={done}>
         <Completion done={done} size="card" onToggle={onToggleDone} />
-        <div className={styles.title}>{title ?? card.title}</div>
+        <div className={styles.title} data-done={done}>
+          {title ?? card.title}
+        </div>
       </div>
-      {hasBadges && (
-        <div className={styles.badges}>
-          {card.requester && <span className={styles.chip}>{card.requester}</span>}
-          {hasDescription && <AlignLeft size={16} aria-label="Tiene descripción" />}
-          {card.checklist.length > 0 && (
-            <span className={styles.badge} data-complete={checked === card.checklist.length}>
-              <ListChecks size={16} aria-hidden />
-              {checked}/{card.checklist.length}
+      {hasMeta && (
+        <div className={styles.meta}>
+          {label && (
+            <span className={styles.metaItem} data-label={label.id}>
+              <LabelDot color={label.color} />
+              {label.name}
+            </span>
+          )}
+          {card.requester && (
+            <span className={styles.metaItem} data-strong>
+              <span className={styles.avatar} aria-hidden>
+                {card.requester[0]}
+              </span>
+              {card.requester}
+            </span>
+          )}
+          {total > 0 && (
+            <span className={styles.metaItem} data-complete={checked === total}>
+              <span
+                className={styles.ring}
+                style={{ "--p": `${(checked / total) * 100}%` } as CSSProperties}
+                aria-hidden
+              />
+              {checked}/{total}
+            </span>
+          )}
+          {hasDescription && (
+            <span className={styles.metaItem} data-faint>
+              <AlignLeft size={14} aria-label="Tiene descripción" />
             </span>
           )}
         </div>
