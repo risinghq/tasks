@@ -3,16 +3,7 @@ import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { admin, send, setNow } from "./helpers";
 
-const TABLES = [
-  "api_tokens",
-  "cards",
-  "labels",
-  "links",
-  "login_attempts",
-  "users",
-  "settings",
-  "d1_migrations",
-];
+const TABLES = ["api_tokens", "cards", "labels", "login_attempts", "users", "settings", "d1_migrations"];
 
 async function dropEverything() {
   await env.DB.batch(TABLES.map((table) => env.DB.prepare(`DROP TABLE IF EXISTS ${table}`)));
@@ -60,8 +51,8 @@ describe("the accounts migration on a database with data", () => {
       await applyD1Migrations(env.DB, env.MIGRATIONS);
 
       // The account cannot sign in until it is claimed.
-      const unclaimed = await env.DB.prepare("SELECT email, password_hash AS hash, role FROM users").all();
-      expect(unclaimed.results).toEqual([{ email: null, hash: null, role: "admin" }]);
+      const unclaimed = await env.DB.prepare("SELECT email, role FROM users").all();
+      expect(unclaimed.results).toEqual([{ email: null, role: "admin" }]);
 
       const me = await admin();
       const { cards, labels } = await me.board();

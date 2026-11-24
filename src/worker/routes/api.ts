@@ -3,7 +3,6 @@ import { Hono } from "hono";
 import { limaDate, parseWeek, weekOf } from "../../shared/dates";
 import type { Board, DoneWeek, Settings } from "../../shared/model";
 import {
-  changePasswordSchema,
   createCardSchema,
   createLabelSchema,
   moveCardSchema,
@@ -14,9 +13,8 @@ import {
 import { cardsOf } from "../cards";
 import { connect } from "../db/client";
 import { labelsOf } from "../labels";
-import { hashPassword, verifyPassword } from "../password";
-import { requireSession, startSession, type AppEnv } from "../session";
-import { changePassword, regenerateReportToken, renameUser, reportTokenOf } from "../users";
+import { requireSession, type AppEnv } from "../session";
+import { regenerateReportToken, renameUser, reportTokenOf } from "../users";
 import { members } from "./members";
 import { tokens } from "./tokens";
 
@@ -122,19 +120,6 @@ api.patch("/settings", zValidator("json", updateSettingsSchema), async (c) => {
   const db = connect(c.env);
   await renameUser(db, user.id, name);
   return c.json(settingsOf({ ...user, name }, await reportTokenOf(db, user.id)));
-});
-
-/** Changes the password, signs out every other browser and keeps this one signed in. */
-api.post("/settings/password", zValidator("json", changePasswordSchema), async (c) => {
-  const user = c.get("user");
-  const { current, password } = c.req.valid("json");
-  if (!(await verifyPassword(current, user.passwordHash))) {
-    return c.json({ error: "wrong password" }, 403);
-  }
-  const version = await changePassword(connect(c.env), user, await hashPassword(password));
-  if (version === undefined) return c.json({ error: "session changed, try again" }, 409);
-  await startSession(c, user.id, version);
-  return c.body(null, 204);
 });
 
 api.post("/settings/report-token", async (c) => {

@@ -1,35 +1,28 @@
 import type { Context } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { createMiddleware } from "hono/factory";
-import { safeEqualText, sign } from "./crypto";
+import { safeEqualText } from "./crypto";
 import { connect } from "./db/client";
+import { SESSION_COOKIE, SESSION_MAX_AGE_SECONDS, sessionCookieValue, signatureOf } from "./session-cookie";
 import { findUser, type User } from "./users";
-
-const COOKIE = "tasks_session";
-const MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
 
 export type AppEnv = { Bindings: Env; Variables: { user: User } };
 
 type AppContext = Context<AppEnv>;
 
-const payload = (userId: string, version: number, expires: number) =>
-  `session.${userId}.${version}.${expires}`;
-
 /** Signs the browser in as a user at their current session version. */
 export async function startSession(c: AppContext, userId: string, version: number): Promise<void> {
-  const expires = Math.floor(Date.now() / 1000) + MAX_AGE_SECONDS;
-  const signature = await sign(c.env.SESSION_SECRET, payload(userId, version, expires));
-  setCookie(c, COOKIE, `${userId}.${version}.${expires}.${signature}`, {
+  setCookie(c, SESSION_COOKIE, await sessionCookieValue(c.env.SESSION_SECRET, userId, version), {
     httpOnly: true,
     secure: true,
     sameSite: "Lax",
     path: "/",
-    maxAge: MAX_AGE_SECONDS,
+    maxAge: SESSION_MAX_AGE_SECONDS,
   });
 }
 
 export function endSession(c: AppContext): void {
-  deleteCookie(c, COOKIE, { path: "/", secure: true });
+  deleteCookie(c, SESSION_COOKIE, { path: "/", secure: true });
 }
 
 /**
@@ -38,13 +31,13 @@ export function endSession(c: AppContext): void {
  * the stored one, is signed out.
  */
 export async function sessionUser(c: AppContext): Promise<User | undefined> {
-  const value = getCookie(c, COOKIE);
+  const value = getCookie(c, SESSION_COOKIE);
   if (!value) return undefined;
   const [userId, version, expires, signature] = value.split(".");
   if (!userId || !version || !expires || !signature || Number(expires) < Date.now() / 1000) {
     return undefined;
   }
-  const expected = await sign(c.env.SESSION_SECRET, payload(userId, Number(version), Number(expires)));
+  const expected = await signatureOf(c.env.SESSION_SECRET, userId, Number(version), Number(expires));
   if (!safeEqualText(signature, expected)) return undefined;
   const user = await findUser(connect(c.env), userId);
   if (!user || user.disabled || user.sessionVersion !== Number(version)) return undefined;

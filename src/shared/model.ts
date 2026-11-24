@@ -26,8 +26,6 @@ export function labelStyle(color: LabelColor): { background: string; color: stri
   return { background: `var(--label-${color}-bg)`, color: `var(--label-${color}-text)` };
 }
 
-export const MIN_PASSWORD = 8;
-
 export const TITLE_MAX = 200;
 export const CHECKLIST_MAX = 100;
 export const CHECKLIST_TEXT_MAX = 200;
@@ -89,9 +87,6 @@ export type Member = {
   role: Role;
   disabled: boolean;
 };
-
-/** A single-use link the admin copies and sends. `path` is relative to the site. */
-export type IssuedLink = { path: string; expiresAt: number };
 
 /** A personal API token as Ajustes lists it. Times are unix seconds. */
 export type ApiToken = { id: string; name: string; createdAt: number; lastUsedAt: number | null };

@@ -1,10 +1,9 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
-import { inviteSchema, updateMemberSchema } from "../../shared/schemas";
+import { addMemberSchema, updateMemberSchema } from "../../shared/schemas";
 import { connect } from "../db/client";
-import { issueInvite, issueReset } from "../links";
 import { requireAdmin, type AppEnv } from "../session";
-import { findMember, listMembers, updateMember } from "../users";
+import { addMember, findMember, listMembers, updateMember } from "../users";
 
 /** Admin-only routes behind `/api/members`. */
 export const members = new Hono<AppEnv>();
@@ -13,15 +12,12 @@ members.use(requireAdmin);
 
 members.get("/", async (c) => c.json(await listMembers(connect(c.env))));
 
-members.post("/invites", zValidator("json", inviteSchema), async (c) => {
-  return c.json(await issueInvite(connect(c.env), c.req.valid("json").role), 201);
-});
-
-members.post("/:id/reset-link", async (c) => {
-  const db = connect(c.env);
-  const member = await findMember(db, c.req.param("id"));
-  if (!member) return c.json({ error: "not found" }, 404);
-  return c.json(await issueReset(db, member.id), 201);
+/** Lets the Google account with this email sign in. The name defaults to the part before the @. */
+members.post("/", zValidator("json", addMemberSchema), async (c) => {
+  const { email, name, role } = c.req.valid("json");
+  const added = await addMember(connect(c.env), { email, name: name ?? email.split("@")[0]!, role });
+  if (!added) return c.json({ error: "that email already has an account" }, 409);
+  return c.json(added, 201);
 });
 
 members.patch("/:id", zValidator("json", updateMemberSchema), async (c) => {

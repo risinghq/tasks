@@ -1,6 +1,17 @@
 import { expect, test as base, type Locator, type Page } from "@playwright/test";
 import type { Board, Card, DoneWeek, Label, LabelColor, ListId } from "../src/shared/model";
-import { DEV_ACCOUNT } from "../scripts/dev-account";
+import { readFileSync } from "node:fs";
+import { FIRST_ADMIN_ID } from "../src/worker/db/first-admin";
+import { SESSION_COOKIE, sessionCookieValue } from "../src/worker/session-cookie";
+
+const sessionSecret = () => /^SESSION_SECRET=(.+)$/m.exec(readFileSync(".dev.vars", "utf8"))![1]!;
+
+/** Signs the page's browser in as a user. Google sign-in is not under test here, so the cookie is forged with the dev secret. */
+export async function signInAs(page: Page, userId: string, version = 0): Promise<void> {
+  const value = await sessionCookieValue(sessionSecret(), userId, version);
+  const { baseURL } = test.info().project.use;
+  await page.context().addCookies([{ name: SESSION_COOKIE, value, url: baseURL! }]);
+}
 
 type Seed = {
   title: string;
@@ -36,10 +47,7 @@ async function allCards(page: Page): Promise<Card[]> {
 
 export const test = base.extend<{ tasks: Tasks }>({
   tasks: async ({ page }, use) => {
-    // Logging in is not under test, so it goes through the API.
-    const { email, password } = DEV_ACCOUNT;
-    const login = await page.request.post("/login", { form: { email, password }, maxRedirects: 0 });
-    expect(login.status()).toBe(303);
+    await signInAs(page, FIRST_ADMIN_ID);
     for (const card of await allCards(page)) await page.request.delete(`/api/cards/${card.id}`);
     for (const label of ((await (await page.request.get("/api/board")).json()) as Board).labels) {
       await page.request.delete(`/api/labels/${label.id}`);

@@ -10,17 +10,13 @@ import {
   type Role,
 } from "../../shared/model";
 
-export const LINK_KINDS = ["invite", "reset"] as const;
-export type LinkKind = (typeof LINK_KINDS)[number];
-
-/** The email and the password hash of the account created by the migration stay null until it is claimed. */
+/** A user signs in with the Google account that has their email. The account the migration creates has no email until it is claimed. */
 export const users = sqliteTable(
   "users",
   {
     id: text().primaryKey(),
     email: text().unique(),
     name: text().notNull(),
-    passwordHash: text("password_hash"),
     role: text({ enum: ROLES }).$type<Role>().notNull(),
     sessionVersion: integer("session_version").notNull().default(0),
     disabled: integer({ mode: "boolean" }).notNull().default(false),
@@ -73,34 +69,7 @@ export const cards = sqliteTable(
   ],
 );
 
-/**
- * Single-use links an admin sends: an invite carries the role, a reset the user.
- * Only the SHA-256 of the token is stored.
- */
-export const links = sqliteTable(
-  "links",
-  {
-    tokenHash: text("token_hash").primaryKey(),
-    kind: text({ enum: LINK_KINDS }).$type<LinkKind>().notNull(),
-    userId: text("user_id").references(() => users.id, { onDelete: "cascade" }),
-    role: text({ enum: ROLES }).$type<Role>(),
-    /** Unix seconds. */
-    expiresAt: integer("expires_at").notNull(),
-    usedAt: integer("used_at"),
-  },
-  (table) => [
-    check(
-      "link_kind_fields",
-      sql`(${table.kind} = 'invite' and ${table.role} is not null and ${table.userId} is null)
-        or (${table.kind} = 'reset' and ${table.userId} is not null and ${table.role} is null)`,
-    ),
-  ],
-);
-
-/**
- * Failed attempts per key in the current window. See `login-limit.ts`. A key is
- * an email for sign-in, or `bearer:` and an address for bad API tokens.
- */
+/** Failed attempts per key in the current window. See `login-limit.ts`. A key is `bearer:` and an address for bad API tokens. */
 export const loginAttempts = sqliteTable("login_attempts", {
   key: text().primaryKey(),
   attempts: integer().notNull(),

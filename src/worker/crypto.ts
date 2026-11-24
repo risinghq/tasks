@@ -29,7 +29,6 @@ export function randomToken(bytes = 32): string {
   return toBase64Url(crypto.getRandomValues(new Uint8Array(bytes)));
 }
 
-/** What the database stores of an invite or reset token. */
 export async function sha256(text: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", encoder.encode(text));
   return toBase64Url(new Uint8Array(digest));

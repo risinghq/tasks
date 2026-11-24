@@ -17,7 +17,7 @@ e2e          Playwright tests that drive the app in Chromium
 
 `src/worker/index.ts` mounts, in this order:
 
-1. `/login`, `/logout`, `/invitacion/<token>` and `/restablecer/<token>`
+1. `/login`, `/auth/google`, `/auth/google/callback` and `/logout`
    (`routes/auth.tsx`), public.
 2. `/api/v1/*` (`routes/v1.ts`), the JSON API for scripts. It takes a bearer
    token and no cookie. See API tokens.
@@ -35,16 +35,16 @@ Without a session, a page request redirects to `/login` and an API request gets
 ## Users
 
 Each person has a row in `users`: id, email (unique, always lowercase), name,
-password hash, role (`admin` or `member`), session version, a disabled flag and
-the report token. Cards, labels and the report token belong to one user. An
-account with no email or no password cannot sign in.
+role (`admin` or `member`), session version, a disabled flag and the report
+token. Cards, labels and the report token belong to one user. The email is the
+Google account that signs in. An account with no email cannot sign in.
 
 The migration creates the first admin with the fixed id
 `00000000-0000-4000-8000-000000000001`, gives it every existing card, the report
-token and the two labels Desarrollo and Cursos, and leaves its email and
-password empty. `bun run claim-admin` sets them (see [deploy.md](deploy.md)). It
-runs one UPDATE that only applies while the password is empty, so a second run
-cannot take the account over.
+token and the two labels Desarrollo and Cursos, and leaves its email empty.
+`bun run claim-admin` sets it (see [deploy.md](deploy.md)). It runs one UPDATE
+that only applies while the email is empty, so a second run cannot take the
+account over.
 
 ## Shared state
 
@@ -126,33 +126,37 @@ The cookie `tasks_session` is `<userId>.<version>.<expires>.<signature>`. The
 signature is an HMAC under `SESSION_SECRET` of the first three parts. The cookie
 is HttpOnly, Secure and SameSite=Lax.
 
-| State      | Entered by                                                                                     | Left by                                                                                                                                               |
-| ---------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Signed out | No cookie, a bad signature, a past expiry, a disabled user or a version that no longer matches | `POST /login` with the right email and password, an invite sign-up or a reset link                                                                    |
-| Signed in  | The cookie carries the user's id, the user's current session version and an expiry in 30 days  | Expiry, `POST /logout` in that browser, the user being disabled, a password change or reset that bumps the session version, or a new `SESSION_SECRET` |
+| State      | Entered by                                                                                     | Left by                                                                                                              |
+| ---------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Signed out | No cookie, a bad signature, a past expiry, a disabled user or a version that no longer matches | A Google sign-in whose verified email belongs to an enabled user                                                     |
+| Signed in  | The cookie carries the user's id, the user's current session version and an expiry in 30 days  | Expiry, `POST /logout` in that browser, the user being disabled, a bumped session version, or a new `SESSION_SECRET` |
 
 `requireSession` reads the user row once per request and leaves it for the
 route. A disabled user or an old version is signed out on the next request.
-Logging out in one browser does not end a session in another. A password change
-or reset bumps `session_version`, which does. The browser that changed the
-password gets a new cookie with the new version and stays signed in. Replacing
-`SESSION_SECRET` ends every session.
+Logging out in one browser does not end a session in another. Bumping
+`session_version` does. Replacing `SESSION_SECRET` ends every session.
 
-### Login limit
+### Google sign-in
 
-`POST /login` counts the attempt in `login_attempts` before it checks the
-password, with one upsert statement per attempt. After 5 attempts for one email
-within 15 minutes, the email is refused for 15 minutes with 429 and a message
-that says so. The sixth attempt is refused even with the right password. While
-the email is locked the row does not change, so more tries do not extend the
-lock. A successful login deletes the row. Inserting the row of a new email
-deletes, in the same statement, every row whose window and lock ended more than
-15 minutes ago, so rows of emails that stopped trying do not pile up. An email
-longer than 254 characters is refused before it is counted.
+`GET /auth/google` makes a random `state` and a PKCE verifier, keeps them in the
+cookie `tasks_google` (`state.verifier`, path `/auth`, 10 minutes, HttpOnly,
+Secure, SameSite=Lax) and redirects to Google with the S256 challenge of the
+verifier. The scope is `openid email`.
 
-`login-limit.ts` counts by a key, so a bad bearer token uses the same table and
-rules under the key `bearer:<address>`, with the address from
-`CF-Connecting-IP`. See API tokens.
+`GET /auth/google/callback` compares the returned `state` with the cookie (400
+on a mismatch or a missing code), then `google.ts` trades the code, the client
+secret and the verifier at Google's token endpoint. The ID token comes straight
+from Google over TLS, so its signature is not checked. Its audience, issuer,
+expiry and `email_verified` are. A failure is 401. The email is then looked up
+in `users`: no account is 403 with the email shown, a disabled account is 403,
+otherwise `startSession` sets the cookie and the browser goes to `/`.
+
+Google proves who the person is. `users` decides who may enter, so an admin adds
+a member by email before that person signs in.
+
+`login-limit.ts` counts failures by a key. A bad bearer token uses it under the
+key `bearer:<address>`, with the address from `CF-Connecting-IP`. See API
+tokens.
 
 ### API tokens
 
@@ -182,33 +186,18 @@ same function the board uses. A Hecho card takes `date`, validated as a Done
 date, or today. `GET /api/v1/cards` reads through the same `cardsOf` functions
 as the board: open cards, and the Hecho cards of `semana`.
 
-### Links
-
-An admin issues an invite link (`/invitacion/<token>`, for a role) or a reset
-link (`/restablecer/<token>`, for a user). A link lasts 7 days and works once.
-The table `links` holds the SHA-256 of the token, never the token. The token is
-shown once, when it is issued.
-
-| State  | Entered by                    | Left by                    |
-| ------ | ----------------------------- | -------------------------- |
-| Usable | Issued by an admin            | Used, or past `expires_at` |
-| Used   | One batch that sets `used_at` | Final                      |
-
-Using a link is one batch. Its first statement does the work (creates the user
-for an invite, sets the password and bumps the session version for a reset) only
-where the link is unused and unexpired. Its second statement marks the link used
-with the same condition. Two tabs sending the same link at once cannot both
-succeed. An invite whose email already has an account fails and stays unused.
-Using a reset link signs the user in. A disabled user is sent to the login page.
-
 ### Members
 
 `/api/members` is for admins. A member gets 403.
 
-An admin can change another user's role and disabled flag, and issue invite and
-reset links. They cannot disable or demote themselves (400). A change that would
-leave no other enabled admin gets 409; the guard is part of the UPDATE
-statement, so two admins cannot remove each other together.
+An admin adds a member with an email and a role (`POST /api/members`). The name
+defaults to the part before the `@`. An email that already has an account is
+409, decided by the unique index, not by a prior read.
+
+An admin can change another user's role and disabled flag. They cannot disable
+or demote themselves (400). A change that would leave no other enabled admin
+gets 409; the guard is part of the UPDATE statement, so two admins cannot remove
+each other together.
 
 ### Report token
 
@@ -234,13 +223,6 @@ The report sends `X-Robots-Tag: noindex, nofollow` and
 
 `src/shared/dates.ts` owns the time zone. Dates are `YYYY-MM-DD` strings in
 America/Lima. A week runs Monday to Sunday and is named `YYYY-Www` (ISO week).
-
-## Auth
-
-A password hash has the form `pbkdf2-sha256$<iterations>$<salt>$<hash>`, with
-100000 iterations, the most the Workers runtime allows. `src/worker/password.ts`
-hashes and verifies. A login for an email with no account is checked against a
-fixed hash, so a miss takes as long as a hit.
 
 ## Board in the browser
 
@@ -342,9 +324,9 @@ memory only.
 motion and the font. Components read role names and write none of those values.
 `docs/design.md` has the rules.
 
-The server pages (login, invitation, reset and the report) import the same file
-with `?raw` (`views/layout.tsx`) and inline it, so they match the app. They
-follow the system theme and read no stored choice.
+The server pages (login and the report) import the same file with `?raw`
+(`views/layout.tsx`) and inline it, so they match the app. They follow the
+system theme and read no stored choice.
 
 The app follows the system theme. `UserMenu.tsx` offers Sistema, Claro and
 Oscuro. A choice in `tasks.theme` sets `data-theme` on `<html>`. An inline

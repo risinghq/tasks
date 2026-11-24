@@ -3,7 +3,6 @@ import type {
   Board,
   Card,
   DoneWeek,
-  IssuedLink,
   IssuedToken,
   Label,
   ListId,
@@ -53,15 +52,13 @@ export const api = {
   removeLabel: (id: string) => request<void>(`/api/labels/${id}`, "DELETE"),
   settings: () => request<Settings>("/api/settings"),
   rename: (name: string) => request<Settings>("/api/settings", "PATCH", { name }),
-  changePassword: (current: string, password: string) =>
-    request<void>("/api/settings/password", "POST", { current, password }),
   regenerateToken: () => request<Settings>("/api/settings/report-token", "POST"),
   tokens: () => request<ApiToken[]>("/api/tokens"),
   createToken: (name: string) => request<IssuedToken>("/api/tokens", "POST", { name }),
   revokeToken: (id: string) => request<void>(`/api/tokens/${id}`, "DELETE"),
   members: () => request<Member[]>("/api/members"),
-  invite: (role: Role) => request<IssuedLink>("/api/members/invites", "POST", { role }),
-  resetLink: (id: string) => request<IssuedLink>(`/api/members/${id}/reset-link`, "POST"),
+  addMember: (member: { email: string; name?: string; role: Role }) =>
+    request<Member>("/api/members", "POST", member),
   updateMember: (id: string, patch: { role?: Role; disabled?: boolean }) =>
     request<Member>(`/api/members/${id}`, "PATCH", patch),
 };

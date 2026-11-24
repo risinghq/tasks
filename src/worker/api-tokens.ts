@@ -4,7 +4,7 @@ import type { ApiToken, IssuedToken } from "../shared/model";
 import { randomToken, sha256 } from "./crypto";
 import { connect, type Db } from "./db/client";
 import { apiTokens } from "./db/schema";
-import { nowSeconds } from "./links";
+import { nowSeconds } from "./clock";
 import { countAttempt } from "./login-limit";
 import type { AppEnv } from "./session";
 import { findUser, type User } from "./users";

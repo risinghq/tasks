@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test";
+import type { Card } from "../src/shared/model";
 import { chooseFromMenu, expect, lift, test } from "./fixtures";
 
 const NOT_SAVED = "No se pudo guardar.";
@@ -73,7 +74,7 @@ test.describe("drag and drop", () => {
     await tasks.open();
 
     const done = tasks.list("Hecho");
-    // On a Monday the day before belongs to an earlier week.
+    // On a Monday the day before belongs to an earlier week, and the board no longer lists the card once dropped.
     const older = done.getByRole("button", { name: "Semanas anteriores" });
     if (await older.isVisible()) await older.click();
     const header = done.getByRole("button", { expanded: false });
@@ -84,7 +85,9 @@ test.describe("drag and drop", () => {
 
     await expect(header).toContainText("2");
     await expect
-      .poll(async () => (await tasks.board()).cards.find((card) => card.id === moving!.id)?.doneDate)
+      .poll(
+        async () => ((await (await page.request.get(`/api/cards/${moving!.id}`)).json()) as Card).doneDate,
+      )
       .toBe(earlier);
   });
 });

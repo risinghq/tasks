@@ -15,11 +15,10 @@ beforeEach(async () => {
     env.DB.prepare("DELETE FROM api_tokens"),
     env.DB.prepare("DELETE FROM cards"),
     env.DB.prepare("DELETE FROM labels"),
-    env.DB.prepare("DELETE FROM links"),
     env.DB.prepare("DELETE FROM login_attempts"),
     env.DB.prepare("DELETE FROM users WHERE id <> ?").bind(FIRST_ADMIN_ID),
     env.DB.prepare(
-      `UPDATE users SET email = NULL, password_hash = NULL, name = 'Propietario', role = 'admin',
+      `UPDATE users SET email = NULL, name = 'Propietario', role = 'admin',
         session_version = 0, disabled = 0, report_token = lower(hex(randomblob(32))) WHERE id = ?`,
     ).bind(FIRST_ADMIN_ID),
   ]);

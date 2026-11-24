@@ -62,31 +62,32 @@ Run these steps by hand once, before the first push to `master` can deploy.
    bun run deploy
    ```
 
-4. Set the signing key. The command asks for the value (see
-   [Secrets](../README.md#secrets)):
+4. Set the secrets. Each command asks for the value (see
+   [Secrets](../README.md#secrets)). Make a Web application client in Google
+   Cloud first, with `https://<host>/auth/google/callback` as its redirect URI:
 
    ```sh
    bunx wrangler secret put SESSION_SECRET
+   bunx wrangler secret put GOOGLE_CLIENT_ID
+   bunx wrangler secret put GOOGLE_CLIENT_SECRET
    ```
 
-5. Claim the first admin. The migration creates the account without an email or
-   a password, so nobody can sign in until you do this. The command asks for the
-   password twice:
+5. Claim the first admin. The migration creates the account without an email, so
+   nobody can sign in until you do this. Use the email of the Google account
+   that will sign in:
 
    ```sh
    bun run claim-admin -- --remote --email you@example.com --name "Your Name"
    ```
 
-   It works once. When the account already has a password it prints "The first
+   It works once. When the account already has an email it prints "The first
    admin is already claimed. Nothing changed." and exits with 1. Without
    `--remote` it claims the account in the local database.
 
 `workers_dev` is on, so the Worker answers at
 `https://tasks.<subdomain>.workers.dev`. Wrangler prints the address after the
-deploy. Sign in there with the email and password you chose, then invite the
-others from Ajustes. That address is the `TASKS_URL` of the script.
+deploy. Sign in there with Google, then add the others from Ajustes. That
+address is the `TASKS_URL` of the script.
 
 Deploying over a database that already holds cards keeps them, and the report
-link, under the first admin. Run steps 3 to 5. If the Worker still has an
-`OWNER_PASSWORD_HASH` secret, delete it with
-`bunx wrangler secret delete OWNER_PASSWORD_HASH`.
+link, under the first admin. Run steps 3 to 5.

@@ -17,8 +17,9 @@ bun run dev
 
 `bun run dev` creates `.dev.vars` from `.dev.vars.example` on the first run,
 applies the migrations to the local D1 database and serves the app at
-<http://localhost:5173>. Sign in with `dev@tasks.test` and the password
-`tasks-dev`.
+<http://localhost:5173>. The local admin is `dev@tasks.test`. Signing in with
+Google needs a Google client in `.dev.vars` (see [Secrets](#secrets)); the tests
+sign in with a cookie signed by `SESSION_SECRET` instead.
 
 ## Use it
 
@@ -60,9 +61,8 @@ applies the migrations to the local D1 database and serves the app at
   and Salir. Tema is Sistema, Claro or Oscuro; Sistema follows the device.
 - On a screen narrower than 768px the lists become tabs, starting on En curso.
   Mover in a card changes its list there.
-- The settings dialog (Ajustes) changes your name and password and shows your
-  report link, which it copies and regenerates. Regenerating invalidates the old
-  link. Changing the password signs out your other browsers.
+- The settings dialog (Ajustes) changes your name and shows your report link,
+  which it copies and regenerates. Regenerating invalidates the old link.
 - The report is at `/r/<token>` and shows your name and your cards.
   `?semana=2026-W42` picks another week.
 
@@ -105,27 +105,26 @@ that address 429 with `Retry-After` for 15 minutes. A valid token still works.
 
 Admins see a Miembros section in Ajustes.
 
-- "Invitar" makes a single-use link for a role, `/invitacion/<token>`, that
-  lasts 7 days. Copy it and send it yourself, because tasks sends no email. The
-  person opens it, enters a name, an email and a password, and lands signed in
-  on their own empty board.
-- Each member has "Enlace para restablecer contraseña", a single-use link of 7
-  days that sets a new password and signs out their other browsers.
+- "Añadir" takes the email of a Google account and a role. That person signs in
+  with Google and lands on their own empty board. tasks sends no email, so tell
+  them yourself.
 - "Desactivar" signs a member out at once and refuses their login until
   "Activar". An admin cannot disable or demote themselves, so there is always
   one.
-- Five failed logins for one email within 15 minutes lock that email for 15
-  minutes.
 
 ## Secrets
 
-| Name             | Meaning                            |
-| ---------------- | ---------------------------------- |
-| `SESSION_SECRET` | Key that signs the session cookie. |
+| Name                   | Meaning                                   |
+| ---------------------- | ----------------------------------------- |
+| `SESSION_SECRET`       | Key that signs the session cookie.        |
+| `GOOGLE_CLIENT_ID`     | Client ID of the Google OAuth web client. |
+| `GOOGLE_CLIENT_SECRET` | Client secret of the same Google client.  |
 
-Generate a signing key with `openssl rand -base64 48`. Passwords live in the
-database as PBKDF2 hashes, never in a secret. API tokens need no secret: the
-database holds their SHA-256 hash.
+Generate a signing key with `openssl rand -base64 48`. The Google client is a
+Web application client whose authorized redirect URI is
+`https://<host>/auth/google/callback` (add
+`http://localhost:5173/auth/google/callback` for local use). API tokens need no
+secret: the database holds their SHA-256 hash.
 
 ## Migrate
 

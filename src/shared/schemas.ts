@@ -1,14 +1,6 @@
 import { z } from "zod";
 import { MIN_DATE, parseWeek } from "./dates";
-import {
-  CHECKLIST_MAX,
-  CHECKLIST_TEXT_MAX,
-  LABEL_COLORS,
-  LISTS,
-  MIN_PASSWORD,
-  ROLES,
-  TITLE_MAX,
-} from "./model";
+import { CHECKLIST_MAX, CHECKLIST_TEXT_MAX, LABEL_COLORS, LISTS, ROLES, TITLE_MAX } from "./model";
 
 const title = z.string().trim().min(1).max(TITLE_MAX);
 const description = z.string().max(10_000);
@@ -87,18 +79,9 @@ export const updateLabelSchema = z.object({
 
 const userName = z.string().trim().min(1).max(80);
 const email = z.string().trim().toLowerCase().max(254).pipe(z.email());
-const password = z.string().min(MIN_PASSWORD).max(200);
-
-export const loginSchema = z.object({
-  email: z.string().trim().toLowerCase().max(254),
-  password: z.string().max(200),
-});
-export const signUpSchema = z.object({ name: userName, email, password });
-export const resetSchema = z.object({ password });
 export const updateSettingsSchema = z.object({ name: userName });
-export const changePasswordSchema = z.object({ current: z.string().max(200), password });
 
-export const inviteSchema = z.object({ role: z.enum(ROLES) });
+export const addMemberSchema = z.object({ email, name: userName.optional(), role: z.enum(ROLES) });
 export const updateMemberSchema = z.object({
   role: z.enum(ROLES).optional(),
   disabled: z.boolean().optional(),

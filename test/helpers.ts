@@ -4,7 +4,6 @@ import type {
   ApiToken,
   Board,
   Card,
-  IssuedLink,
   IssuedToken,
   Label,
   LabelColor,
@@ -12,8 +11,8 @@ import type {
   Role,
   Settings,
 } from "../src/shared/model";
-import { claimAdminSql } from "../src/worker/db/first-admin";
-import { hashPassword } from "../src/worker/password";
+import { claimAdminSql, FIRST_ADMIN_ID } from "../src/worker/db/first-admin";
+import { SESSION_COOKIE, sessionCookieValue } from "../src/worker/session-cookie";
 
 type Init = {
   method?: string;
@@ -56,16 +55,14 @@ export function setNow(iso: string): void {
   vi.setSystemTime(new Date(iso));
 }
 
-export const ADMIN = { email: "ana@example.com", name: "Ana Prueba", password: "clave-de-prueba" };
-export const MEMBER = { email: "beto@example.com", name: "Beto Prueba", password: "otra-clave-de-prueba" };
+export const ADMIN = { email: "ana@example.com", name: "Ana Prueba" };
+export const MEMBER = { email: "beto@example.com", name: "Beto Prueba" };
 
 export const cookieOf = (res: Response): string => res.headers.getSetCookie()[0]!.split(";")[0]!;
 
-/** Signs in through the login form and returns the session cookie. */
-export async function signIn(email: string, password: string): Promise<string> {
-  const res = await send("/login", { method: "POST", form: { email, password } });
-  if (res.status !== 303) throw new Error(`login -> ${res.status}`);
-  return cookieOf(res);
+/** The session cookie of a user, forged with the test secret. The Google callback is tested on its own. */
+export async function signIn(userId: string, version = 0): Promise<string> {
+  return `${SESSION_COOKIE}=${await sessionCookieValue(env.SESSION_SECRET, userId, version)}`;
 }
 
 /** A signed-in user. Every call carries their cookie. */
@@ -92,8 +89,8 @@ export function clientFor(cookie: string) {
     tokens: () => call<ApiToken[]>("/api/tokens"),
     makeToken: (name: string) => call<IssuedToken>("/api/tokens", "POST", { name }),
     members: () => call<Member[]>("/api/members"),
-    invite: (role: Role = "member") => call<IssuedLink>("/api/members/invites", "POST", { role }),
-    resetLink: (memberId: string) => call<IssuedLink>(`/api/members/${memberId}/reset-link`, "POST"),
+    addMember: (email: string, role: Role = "member", name?: string) =>
+      call<Member>("/api/members", "POST", { email, role, name }),
   };
 }
 
@@ -101,27 +98,16 @@ export type Client = ReturnType<typeof clientFor>;
 
 /** Claims the first admin the way `bun run claim-admin` does and signs in. */
 export async function admin(): Promise<Client> {
-  await env.DB.exec(
-    claimAdminSql({ email: ADMIN.email, name: ADMIN.name, passwordHash: await hashPassword(ADMIN.password) }),
-  );
-  return clientFor(await signIn(ADMIN.email, ADMIN.password));
+  await env.DB.exec(claimAdminSql(ADMIN));
+  return clientFor(await signIn(FIRST_ADMIN_ID));
 }
 
-/** Signs up through an invite link, the only way an account is made, and lands signed in. */
-export async function signUp(link: IssuedLink, who = MEMBER): Promise<Response> {
-  return send(link.path, {
-    method: "POST",
-    form: { name: who.name, email: who.email, password: who.password },
-  });
+/** A member the admin added by email, signed in. */
+export async function member(adder: Client, who = MEMBER): Promise<Client> {
+  const added = await adder.addMember(who.email, "member", who.name);
+  return clientFor(await signIn(added.id));
 }
 
-/** A member invited by `inviter` and signed up through the real invite flow. */
-export async function member(inviter: Client, who = MEMBER): Promise<Client> {
-  const res = await signUp(await inviter.invite("member"), who);
-  if (res.status !== 303) throw new Error(`sign-up -> ${res.status} ${await res.text()}`);
-  return clientFor(cookieOf(res));
-}
-
-export async function idOf(inviter: Client, email: string): Promise<string> {
-  return (await inviter.members()).find((m) => m.email === email)!.id;
+export async function idOf(adder: Client, email: string): Promise<string> {
+  return (await adder.members()).find((m) => m.email === email)!.id;
 }

@@ -1,7 +1,7 @@
 import { and, asc, eq, sql } from "drizzle-orm";
 import type { Member, Role } from "../shared/model";
 import { randomToken } from "./crypto";
-import type { Db } from "./db/client";
+import { isUniqueViolation, type Db } from "./db/client";
 import { users } from "./db/schema";
 
 /** The user row a request works with. Read once per request, by `session.ts`. */
@@ -12,7 +12,6 @@ export type User = {
   role: Role;
   sessionVersion: number;
   disabled: boolean;
-  passwordHash: string;
 };
 
 const sessionColumns = {
@@ -22,15 +21,14 @@ const sessionColumns = {
   role: users.role,
   sessionVersion: users.sessionVersion,
   disabled: users.disabled,
-  passwordHash: users.passwordHash,
 };
 
-type Row = Omit<User, "email" | "passwordHash"> & { email: string | null; passwordHash: string | null };
+type Row = Omit<User, "email"> & { email: string | null };
 
-/** An account with no email or no password has not been claimed and cannot sign in. */
+/** An account with no email has not been claimed and cannot sign in. */
 function usable(row: Row | undefined): User | undefined {
-  if (!row?.email || !row.passwordHash) return undefined;
-  return { ...row, email: row.email, passwordHash: row.passwordHash };
+  if (!row?.email) return undefined;
+  return { ...row, email: row.email };
 }
 
 export async function findUser(db: Db, id: string): Promise<User | undefined> {
@@ -45,19 +43,19 @@ export async function renameUser(db: Db, id: string, name: string): Promise<void
   await db.update(users).set({ name }).where(eq(users.id, id));
 }
 
-/**
- * Sets a new password and bumps the session version, which signs out every
- * other browser. Applies only while the caller's version is still current, so
- * two changes at once leave one. Returns the new version.
- */
-export async function changePassword(db: Db, user: User, passwordHash: string): Promise<number | undefined> {
-  const row = await db
-    .update(users)
-    .set({ passwordHash, sessionVersion: sql`${users.sessionVersion} + 1` })
-    .where(and(eq(users.id, user.id), eq(users.sessionVersion, user.sessionVersion)))
-    .returning({ version: users.sessionVersion })
-    .get();
-  return row?.version;
+/** Adds a member who signs in with the Google account that has `email`. Returns undefined when the email already has an account. */
+export async function addMember(
+  db: Db,
+  member: { email: string; name: string; role: Role },
+): Promise<Member | undefined> {
+  const id = crypto.randomUUID();
+  try {
+    await db.insert(users).values({ id, ...member });
+  } catch (error) {
+    if (isUniqueViolation(error)) return undefined;
+    throw error;
+  }
+  return findMember(db, id);
 }
 
 export async function reportTokenOf(db: Db, userId: string): Promise<string> {

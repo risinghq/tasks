@@ -1,6 +1,5 @@
-/** The first admin of a local database made by `bun run dev`. The end-to-end tests sign in with it. */
+/** The first admin of a local database made by `bun run dev`. The end-to-end tests sign in as it. */
 export const DEV_ACCOUNT = {
   email: "dev@tasks.test",
   name: "Dev",
-  password: "tasks-dev",
 };
