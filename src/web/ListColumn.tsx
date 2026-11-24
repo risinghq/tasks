@@ -98,6 +98,7 @@ function DayGroup(props: Shared & { date: string; today: string; open: boolean; 
     data: { open: props.open },
   });
   const Chevron = props.open ? ChevronDown : ChevronRight;
+  const [first, ...rest] = dayHeading(props.date, props.today).split(", ");
 
   return (
     <div className={styles.group}>
@@ -109,8 +110,10 @@ function DayGroup(props: Shared & { date: string; today: string; open: boolean; 
         aria-expanded={props.open}
         onClick={props.onToggle}
       >
-        <Chevron size={16} aria-hidden />
-        <span className={styles.dayLabel}>{dayHeading(props.date, props.today)}</span>
+        <Chevron size={14} aria-hidden />
+        <span className={styles.dayTitle}>{first}</span>
+        {rest.length > 0 && <span className={styles.daySub}>{rest.join(", ")}</span>}
+        <span className={styles.dayLine} aria-hidden />
         <span className={styles.count}>{cards.length}</span>
       </button>
       <Collapsible open={props.open}>
