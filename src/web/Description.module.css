@@ -6,7 +6,7 @@
 
 .label {
   padding-left: var(--space-1);
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   line-height: var(--leading);
   font-weight: var(--weight-strong);
   color: var(--text-muted);
@@ -20,20 +20,13 @@
   border: 0;
   border-radius: var(--radius-card);
   background: transparent;
-  font-size: 0.9375rem;
+  font-size: var(--text-base);
   line-height: 1.55;
   resize: none;
   overflow: hidden;
   transition:
     background-color var(--duration-fast) var(--ease-out),
     box-shadow var(--duration-fast) var(--ease-out);
-}
-
-/* iOS zooms the page into a field whose text is under 16px. */
-@media (pointer: coarse) {
-  .field {
-    font-size: var(--text-base);
-  }
 }
 
 @media (hover: hover) and (pointer: fine) {

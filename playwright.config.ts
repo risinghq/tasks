@@ -15,7 +15,11 @@ export default defineConfig({
     timezoneId: "America/Lima",
     trace: "retain-on-failure",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    { name: "chromium", testIgnore: "shots/**", use: { ...devices["Desktop Chrome"] } },
+    // Measurements and screenshots for design work. They assert nothing `check` should gate on.
+    { name: "shots", testDir: "e2e/shots", use: { ...devices["Desktop Chrome"] } },
+  ],
   webServer: {
     // A fresh local D1 on every run. The built app is served, so a page load is a few
     // requests instead of one per source module.

@@ -191,6 +191,7 @@ rollback bookmark and the first-time setup are in
 bun run check      # format, lint, types, Worker tests and browser tests
 bun run test       # the Worker tests alone
 bun run test:e2e   # the browser tests alone
+bun run shots      # screenshots of the main screens into shots/, not part of check
 ```
 
 The browser tests need Chromium (`bunx playwright install chromium`). They build

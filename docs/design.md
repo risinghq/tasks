@@ -89,18 +89,21 @@ Latin and Latin Extended. The Worker serves them at `/fonts/*`. The first file
 is preloaded and `font-display: swap` shows the system face until it arrives. A
 page requests no font from another origin.
 
-| Token          | Size                  | Use                         |
-| -------------- | --------------------- | --------------------------- |
-| `--text-xs`    | 12px                  | Counts, badges, hints       |
-| `--text-sm`    | 14px                  | Card titles, controls, body |
-| `--text-base`  | 16px                  | Fields, dialog body         |
-| `--text-lg`    | 20px                  | Dialog and page headings    |
-| `--text-xl`    | 24px                  | Card back title             |
-| `--text-title` | 32px, 40px from 768px | A page title                |
+| Token          | Size                  | Use                               |
+| -------------- | --------------------- | --------------------------------- |
+| `--text-2xs`   | 10px                  | Avatar initials, file badges      |
+| `--text-xs`    | 12px                  | Counts, badges, hints             |
+| `--text-sm`    | 14px                  | Card titles, controls, labels     |
+| `--text-base`  | 16px                  | Fields, card back and report text |
+| `--text-lg`    | 20px                  | Dialog headings, report sections  |
+| `--text-xl`    | 24px                  | Card back title                   |
+| `--text-title` | 32px, 40px from 768px | A page title, the report's        |
 
-Sizes are in rem. Two weights: `--weight-regular` 400 and `--weight-strong` 600.
-Counts, dates and percentages use `font-variant-numeric: tabular-nums`. A field
-on a phone is 16px so the browser does not zoom on focus.
+Sizes are in rem. Every size in the app and the report is one of these tokens;
+only the landing page's display headings scale with the viewport. Three weights:
+`--weight-regular` 400, `--weight-medium` 500 and `--weight-strong` 600. Counts,
+dates and percentages use `font-variant-numeric: tabular-nums`. A field on a
+touch screen is at least 16px, so iOS does not zoom on focus.
 
 ## Space and radius
 
