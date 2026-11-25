@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
-import { isUniqueViolation, type Db } from "./db/client";
-import { users } from "./db/schema";
+import { and, eq } from "drizzle-orm";
+import { batch, isUniqueViolation, type Db } from "./db/client";
+import { users, workspaces } from "./db/schema";
 import { createPersonalWorkspace } from "./workspaces";
 
 /** The user row a request works with. Read once per request, by `session.ts`. */
@@ -19,8 +19,19 @@ export const findUser = (db: Db, id: string): Promise<User | undefined> =>
 export const findUserByEmail = (db: Db, email: string): Promise<User | undefined> =>
   db.select(userColumns).from(users).where(eq(users.email, email)).get();
 
+/**
+ * Renames the user, and their personal workspace with them while it still has
+ * their name. A personal workspace its owner renamed keeps the name they chose.
+ */
 export async function renameUser(db: Db, id: string, name: string): Promise<void> {
-  await db.update(users).set({ name }).where(eq(users.id, id));
+  const before = db.select({ name: users.name }).from(users).where(eq(users.id, id));
+  await batch(db, [
+    db
+      .update(workspaces)
+      .set({ name })
+      .where(and(eq(workspaces.id, id), eq(workspaces.name, before))),
+    db.update(users).set({ name }).where(eq(users.id, id)),
+  ]);
 }
 
 /**

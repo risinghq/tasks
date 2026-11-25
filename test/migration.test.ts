@@ -75,7 +75,7 @@ describe("the accounts migration on a database with data", () => {
       ).all();
       expect(membership.results).toEqual([{ workspace_id: FIRST_USER, user_id: FIRST_USER, role: "owner" }]);
       expect((await me.me()).workspaces).toEqual([
-        { id: FIRST_USER, name: "Personal", role: "owner", openCount: 5 },
+        { id: FIRST_USER, name: ADMIN.name, role: "owner", openCount: 5 },
       ]);
 
       const { cards, labels } = await me.board();

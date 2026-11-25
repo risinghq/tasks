@@ -1,3 +1,4 @@
+import { DEV_ACCOUNT } from "../scripts/dev-account";
 import { chooseFromMenu, chooseWorkspace, expect, signInAs, switcher, test } from "./fixtures";
 
 test("an owner adds a member, who sees the shared board and keeps a personal one", async ({
@@ -68,7 +69,7 @@ test("a user makes a workspace for a company and its board is separate", async (
   await expect(page.locator("[data-card-id]")).toHaveCount(0);
 
   // Back to the personal one.
-  await chooseWorkspace(page, "Personal");
+  await chooseWorkspace(page, DEV_ACCOUNT.name);
   await expect(menu).not.toContainText("Empresa A");
   await expect(tasks.card("Personal")).toBeVisible();
 
@@ -91,7 +92,7 @@ test("the workspace switcher lists the spaces with their open counts", async ({ 
 
   await switcher(page).click();
   const sheet = page.getByRole("dialog", { name: "Espacios" });
-  const personal = sheet.getByRole("radio", { name: /Personal/ });
+  const personal = sheet.getByRole("radio", { name: new RegExp(DEV_ACCOUNT.name) });
   await expect(personal).toHaveAttribute("aria-checked", "true");
   await expect(personal).toContainText("1 abierta");
   await expect(sheet.getByRole("menuitem", { name: "Compartir informe" })).toBeVisible();

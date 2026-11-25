@@ -128,8 +128,9 @@ export async function signUp(person: { email: string; name: string }): Promise<C
       person.email,
       person.name,
     ),
-    env.DB.prepare("INSERT INTO workspaces (id, name, created_at) VALUES (?, 'Personal', unixepoch())").bind(
+    env.DB.prepare("INSERT INTO workspaces (id, name, created_at) VALUES (?, ?, unixepoch())").bind(
       id,
+      person.name,
     ),
     env.DB.prepare("INSERT INTO workspace_members (workspace_id, user_id, role) VALUES (?, ?, 'owner')").bind(
       id,

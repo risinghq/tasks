@@ -21,7 +21,7 @@ if (migrate.status !== 0) process.exit(migrate.status ?? 1);
 const { id, email, name } = DEV_ACCOUNT;
 const made = executeSql(
   `INSERT INTO users (id, email, name) VALUES ('${id}', '${email}', '${name}') ON CONFLICT DO NOTHING RETURNING id;` +
-    ` INSERT INTO workspaces (id, name, created_at) VALUES ('${id}', 'Personal', unixepoch()) ON CONFLICT DO NOTHING;` +
+    ` INSERT INTO workspaces (id, name, created_at) VALUES ('${id}', '${name}', unixepoch()) ON CONFLICT DO NOTHING;` +
     ` INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ('${id}', '${id}', 'owner') ON CONFLICT DO NOTHING;`,
   { remote: false, state },
 );

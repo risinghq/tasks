@@ -58,18 +58,17 @@ not to a user. `workspace_members` joins users to workspaces with the role
 `owner` or `member`. An owner renames or deletes the workspace, manages members
 and the report links. A member works on the cards and labels.
 
-A user's personal workspace has the user's own id and the name "Personal".
-Signing up for the first time creates both rows in one batch
-(`createPersonalWorkspace`). A person who wants to keep company A apart from
-company B makes one workspace for each (`POST /api/workspaces`) and is its
-owner.
+A user's personal workspace has the user's own id and starts with the user's
+name, so a member's menu and a report tell two people's boards apart. Signing up
+for the first time creates both rows in one batch (`createPersonalWorkspace`). A
+person who wants to keep company A apart from company B makes one workspace for
+each (`POST /api/workspaces`) and is its owner.
 
 A request names its workspace in the `X-Workspace` header. Without it, the
 request uses the user's personal workspace. `requireWorkspace` answers 403 for a
 workspace the user does not belong to, the same as for one that does not exist.
 The web app keeps its choice in `localStorage` (`src/web/workspace.ts`) and
-sends it on every call. A member sees someone else's personal workspace under
-its owner's name.
+sends it on every call.
 
 The migration `0005_workspaces.sql` gives every existing user a personal
 workspace and moves their cards, labels, tokens and report token into it. The
@@ -271,11 +270,10 @@ Compartir informe dialog (`ShareDialog.tsx`).
 | Current | The link's creation, or a regenerate | The next regenerate or delete |
 
 Anyone with a token reads that link's report: its scope and its cards, never
-another workspace's. A label link shows only that label's cards. A personal
-workspace reports under its owner's name. A member link reports under the
-member's name. Two tabs regenerating together leave one token in the row, the
-later write, and the other tab shows a link that no longer works until it
-reopens the dialog.
+another workspace's. A label link shows only that label's cards. A member link
+reports under the member's name. Two tabs regenerating together leave one token
+in the row, the later write, and the other tab shows a link that no longer works
+until it reopens the dialog.
 
 The report sends `X-Robots-Tag: noindex, nofollow` and
 `Cache-Control: no-store`.
@@ -300,12 +298,13 @@ gets 404. Pictures, PDFs and plain text are served inline; any other type is a
 download as `application/octet-stream`, with `nosniff`, so an uploaded page
 never runs on the app's origin.
 
-In the browser, `useBoard` adds, edits and deletes notes and keeps `noteCount`
-in step. A note on a card whose create is still pending waits for the create.
-Text longer than `NOTE_TEXT_MAX` becomes a `texto.txt` file. `useNotes` holds
-the card back's list. A paste outside a text field and a file drop become notes:
-on the card back anywhere (`useNoteTarget`), and on the board for the card under
-the pointer (`useShortcuts` for paste, `useCardFileDrop` for drop).
+In the browser, `noteWrites.ts` adds, edits and deletes notes, and `useBoard`
+keeps `noteCount` in step. A note on a card whose create is still pending waits
+for the create. Text longer than `NOTE_TEXT_MAX` becomes a `texto.txt` file.
+`useNotes` holds the card back's list. A paste outside a text field and a file
+drop become notes: on the card back anywhere (`useNoteTarget`), and on the board
+for the card under the pointer (`useShortcuts` for paste, `useCardFileDrop` for
+drop).
 
 ## Dates
 
@@ -343,9 +342,11 @@ the board is never fetched again after a write.
   queued. If the page hides first, the held deletes go out as `fetch` with
   `keepalive`. A delete that gets 404 counts as done.
 
-Labels do not go through this queue. A label is created, renamed, recolored or
-deleted with one request, and the label popover shows the error of a failed
-request, because the card back hides toasts.
+Labels do not go through this queue. `useLabels` creates, renames, recolors or
+deletes a label with one request, and the label popover shows the error of a
+failed request, because the card back hides toasts. A deleted label is cleared
+from the cards in `base` and in `pending`. `useToasts` holds the toasts and
+their timers.
 
 The completion circle on a card (`Board.tsx`) is a move. Outside Hecho it goes
 before the first card of today's group, so the card lands on top. In Hecho it
@@ -432,6 +433,18 @@ requests a font from another origin.
 Hover backgrounds, popovers and the day groups animate for 120 to 250ms
 (`--duration-fast`, `--duration` and `--duration-slow`) with `--ease-out`. A day
 group collapses by animating `grid-template-rows`. Hover styles apply only where
-the device hovers with a fine pointer, and a pressed button scales to 0.97.
+the device hovers with a fine pointer. Every enabled button scales to 0.97 while
+pressed, from one rule in `styles/global.css`. It uses `scale`, which adds to a
+component's own `transform`.
+
+A layer leaves the way it came. A dialog, the card back, a sheet and a popover
+close through `exit()` (`src/web/exit.ts`). It sets `data-closing` on the
+element, the module's `[data-closing]` rule plays the exit, and the element is
+closed or unmounted when that animation ends. Under 768px a sheet rises from the
+bottom edge and sinks back into it. A popover grows from the side of its anchor,
+with `transform-origin` set by `Popover.tsx`. A menu item that closes its layer
+through the parent's state unmounts it at once.
+
 `styles/global.css` turns every animation and transition off under
-`prefers-reduced-motion: reduce`. The report page has no animation.
+`prefers-reduced-motion: reduce`, so an exit closes at once. The report page has
+no animation.

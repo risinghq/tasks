@@ -25,6 +25,28 @@
   }
 }
 
+/* exit() sets data-closing; the dialog closes when this animation ends. */
+.dialog[data-closing] {
+  animation: leave var(--duration-fast) var(--ease-out) forwards;
+}
+
+.dialog[data-closing]::backdrop {
+  animation: fade-out var(--duration-fast) var(--ease-out) forwards;
+}
+
+@keyframes leave {
+  to {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+
+@keyframes fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
 .content {
   padding: var(--space-4) var(--space-6) var(--space-6);
 }
@@ -53,12 +75,11 @@
   color: var(--text-muted);
   transition:
     background-color var(--duration-fast) var(--ease-out),
-    transform var(--duration-fast) var(--ease-out);
+    scale var(--duration-fast) var(--ease-out);
 }
 
 .close:active {
   background: var(--pressed);
-  transform: scale(0.97);
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -84,6 +105,16 @@
 
   @keyframes rise {
     from {
+      transform: translateY(100%);
+    }
+  }
+
+  .dialog[data-sheet="true"][data-closing] {
+    animation-name: sink;
+  }
+
+  @keyframes sink {
+    to {
       transform: translateY(100%);
     }
   }

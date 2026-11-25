@@ -88,7 +88,8 @@ test.describe("narrow screens", () => {
       {
         title: `Título ${"a".repeat(60)}`,
         list: "en_curso",
-        label: { name: `Etiqueta ${"b".repeat(60)}`, color: "blue" },
+        // The longest name a label takes.
+        label: { name: `Etiqueta ${"b".repeat(31)}`, color: "blue" },
         checklist: [{ text: `Elemento ${"c".repeat(60)}`, done: false }],
         description: `Nota ${"d".repeat(60)}`,
       },

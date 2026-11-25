@@ -1,7 +1,7 @@
 import { createContext, useContext } from "react";
 import type { Label, Person } from "../shared/model";
 import type { CreateLabel, UpdateLabel } from "../shared/schemas";
-import type { LabelResult } from "./useBoard";
+import type { LabelResult } from "./useLabels";
 
 /** What the cards and lists ask the board page to do. */
 export type Ui = {

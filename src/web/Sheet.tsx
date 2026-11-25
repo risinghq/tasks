@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { exit } from "./exit";
 import styles from "./Sheet.module.css";
 import { useEscape } from "./useEscape";
 
@@ -34,7 +35,12 @@ export function Sheet(props: {
   children: ReactNode;
 }) {
   const panel = useRef<HTMLDivElement>(null);
-  useEscape(props.onClose);
+  const scrim = useRef<HTMLDivElement>(null);
+  const dismiss = () => {
+    scrim.current?.setAttribute("data-closing", "");
+    exit(panel.current, props.onClose);
+  };
+  useEscape(dismiss);
 
   useLayoutEffect(() => {
     const el = panel.current!;
@@ -55,7 +61,7 @@ export function Sheet(props: {
 
   return (
     <>
-      <div className={styles.scrim} onPointerDown={props.onClose} />
+      <div ref={scrim} className={styles.scrim} onPointerDown={dismiss} />
       <div
         ref={panel}
         className={styles.panel}

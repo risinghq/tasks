@@ -57,6 +57,13 @@
       "when": 1795571805539,
       "tag": "0007_outgoing_stardust",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1795603776812,
+      "tag": "0008_personal_named",
+      "breakpoints": true
     }
   ]
 }

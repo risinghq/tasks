@@ -7,12 +7,24 @@
   border-radius: var(--radius-lg);
   background: var(--overlay);
   color: var(--text);
-  transform-origin: top left;
   animation: pop var(--duration-fast) var(--ease-out);
 }
 
 @keyframes pop {
   from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+/* exit() sets data-closing; the popover unmounts when this ends. */
+.popover[data-closing] {
+  pointer-events: none;
+  animation: unpop var(--duration-fast) var(--ease-out) forwards;
+}
+
+@keyframes unpop {
+  to {
     opacity: 0;
     transform: scale(0.96);
   }
@@ -49,7 +61,7 @@
   translate: 0 -50%;
   transition:
     background-color var(--duration-fast) var(--ease-out),
-    transform var(--duration-fast) var(--ease-out);
+    scale var(--duration-fast) var(--ease-out);
 }
 
 .close:active {

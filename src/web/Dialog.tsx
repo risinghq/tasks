@@ -1,6 +1,7 @@
 import { X } from "lucide-react";
 import { useEffect, useId, useRef, type ReactNode } from "react";
 import styles from "./Dialog.module.css";
+import { exit } from "./exit";
 import { useEscape } from "./useEscape";
 
 /**
@@ -18,7 +19,10 @@ export function useModal() {
     // dialog itself when nothing is marked.
     (dialog.querySelector<HTMLElement>("[data-autofocus]") ?? dialog).focus();
   }, []);
-  const close = () => ref.current?.close();
+  const close = () => {
+    const dialog = ref.current;
+    if (dialog?.open) exit(dialog, () => dialog.close());
+  };
   useEscape(close);
 
   return {
@@ -29,7 +33,7 @@ export function useModal() {
       // Escape goes through useEscape. A cancel that gets here closes nothing.
       onCancel: (event: { preventDefault(): void }) => event.preventDefault(),
       onClick: (event: { target: unknown }) => {
-        if (event.target === ref.current) ref.current?.close();
+        if (event.target === ref.current) close();
       },
     },
   };

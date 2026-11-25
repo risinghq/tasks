@@ -1,4 +1,4 @@
-import { expect, test as base, type Locator, type Page } from "@playwright/test";
+import { expect, test as base, type APIResponse, type Locator, type Page } from "@playwright/test";
 import type { Board, Card, DoneWeek, Label, LabelColor, ListId } from "../src/shared/model";
 import { readFileSync } from "node:fs";
 import { DEV_ACCOUNT } from "../scripts/dev-account";
@@ -34,11 +34,18 @@ export type Tasks = {
   list(name: string): Locator;
 };
 
+/** The response body, after failing the test on an error status, which a seed would otherwise carry on as data. */
+async function ok<T>(response: Promise<APIResponse>): Promise<T> {
+  const res = await response;
+  if (!res.ok()) throw new Error(`${res.status()} ${res.url()}: ${await res.text()}`);
+  return (await res.json()) as T;
+}
+
 async function allCards(page: Page): Promise<Card[]> {
-  const board = (await (await page.request.get("/api/board")).json()) as Board;
+  const board = await ok<Board>(page.request.get("/api/board"));
   const cards = [...board.cards];
   for (let week = board.olderWeek; week;) {
-    const done = (await (await page.request.get(`/api/done?week=${week}`)).json()) as DoneWeek;
+    const done = await ok<DoneWeek>(page.request.get(`/api/done?week=${week}`));
     cards.push(...done.cards);
     week = done.olderWeek;
   }
@@ -49,37 +56,34 @@ export const test = base.extend<{ tasks: Tasks }>({
   tasks: async ({ page }, use) => {
     await signInAs(page, DEV_ACCOUNT.id);
     for (const card of await allCards(page)) await page.request.delete(`/api/cards/${card.id}`);
-    for (const label of ((await (await page.request.get("/api/board")).json()) as Board).labels) {
+    for (const label of (await ok<Board>(page.request.get("/api/board"))).labels) {
       await page.request.delete(`/api/labels/${label.id}`);
     }
 
     const labelNamed = async (name: string, color: LabelColor): Promise<Label> => {
-      const known = ((await (await page.request.get("/api/board")).json()) as Board).labels;
+      const known = (await ok<Board>(page.request.get("/api/board"))).labels;
       const found = known.find((label) => label.name === name);
       if (found) return found;
-      const res = await page.request.post("/api/labels", { data: { name, color } });
-      return (await res.json()) as Label;
+      return ok<Label>(page.request.post("/api/labels", { data: { name, color } }));
     };
 
     await use({
       async seed(cards) {
         const created: Card[] = [];
         for (const { title, list, doneDate, label, ...fields } of cards) {
-          const res = await page.request.post("/api/cards", { data: { title, list } });
-          let card = (await res.json()) as Card;
+          let card = await ok<Card>(page.request.post("/api/cards", { data: { title, list } }));
           const labelId = label ? (await labelNamed(label.name, label.color)).id : undefined;
           if (doneDate || labelId || Object.keys(fields).length > 0) {
-            const patch = await page.request.patch(`/api/cards/${card.id}`, {
-              data: { ...fields, labelId, doneDate },
-            });
-            card = (await patch.json()) as Card;
+            card = await ok<Card>(
+              page.request.patch(`/api/cards/${card.id}`, { data: { ...fields, labelId, doneDate } }),
+            );
           }
           created.push(card);
         }
         return created;
       },
       async board() {
-        return (await (await page.request.get("/api/board")).json()) as Board;
+        return ok<Board>(page.request.get("/api/board"));
       },
       async open(path = "/") {
         await page.goto(path);
