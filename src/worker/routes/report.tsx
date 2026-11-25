@@ -5,6 +5,7 @@ import { cardsOf } from "../cards";
 import { connect } from "../db/client";
 import { labelsOf } from "../labels";
 import { reportLinkByToken, workspaceForReport } from "../report-links";
+import { findUser } from "../users";
 import { ReportPage } from "../views/report";
 
 export const report = new Hono<{ Bindings: Env }>();
@@ -23,9 +24,13 @@ report.get("/:token", async (c) => {
   const workspace = await workspaceForReport(db, link.workspaceId);
   if (!workspace) return c.text("No encontrado", 404);
 
-  const cards = cardsOf(db, link.workspaceId, link.labelId ?? undefined);
+  const cards = cardsOf(db, link.workspaceId, {
+    labelId: link.labelId ?? undefined,
+    memberId: link.memberId ?? undefined,
+  });
   const labels = await labelsOf(db, link.workspaceId).list();
   const label = labels.find((l) => l.id === link.labelId);
+  const member = link.memberId ? await findUser(db, link.memberId) : undefined;
 
   const today = limaDate(new Date());
   const currentWeek = weekOf(today);
@@ -44,9 +49,9 @@ report.get("/:token", async (c) => {
       token={c.req.param("token")}
       week={week}
       currentWeek={currentWeek}
-      scopeName={label?.name ?? workspace.name}
-      ownerName={workspace.ownerName}
-      wholeWorkspace={!link.labelId}
+      scopeName={label?.name ?? member?.name ?? workspace.name}
+      subtitle={member ? `Informe semanal · ${workspace.name}` : `Informe semanal de ${workspace.ownerName}`}
+      showLabels={!link.labelId}
       today={today}
       url={url.host + url.pathname + url.search}
       days={days}

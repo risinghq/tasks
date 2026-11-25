@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ReportLink } from "../src/shared/model";
-import { admin, joined, member, send, setNow } from "./helpers";
+import { admin, idOf, joined, MEMBER, member, send, setNow } from "./helpers";
 
 const FRIDAY = "2026-10-16T17:00:00Z";
 
@@ -33,8 +33,7 @@ async function seeded() {
   });
   await me.add("Todavía pendiente", "pendiente");
   await me.add("Planeado para la semana", "esta_semana");
-  const { reportToken } = await me.workspaceSettings();
-  return { me, development, token: reportToken };
+  return { me, development, token: await me.wholeReportToken() };
 }
 
 const report = (token: string, query = "") => send(`/r/${token}${query}`);
@@ -144,7 +143,7 @@ describe("weekly report", () => {
     const mine = await (await report(token)).text();
     expect(mine).not.toContain("Beto");
 
-    const theirs = await (await report((await beto.workspaceSettings()).reportToken)).text();
+    const theirs = await (await report(await beto.wholeReportToken())).text();
     expect(theirs).toContain("Terminada por Beto");
     expect(theirs).toContain("Tarea de Beto");
     expect(theirs).not.toContain("Publicar la API");
@@ -181,17 +180,100 @@ describe("a label link", () => {
   });
 });
 
-describe("report links", () => {
-  it("lists each link with its scope", async () => {
-    const { me, development } = await seeded();
-    const whole = await me.call<ReportLink>("/api/report-links", "POST", {});
-    const scoped = await me.call<ReportLink>("/api/report-links", "POST", { labelId: development.id });
+describe("a member link", () => {
+  it("shows only the cards assigned to that member, under their name", async () => {
+    const { me } = await seeded();
+    const beto = await joined(me);
+    const betoId = await idOf(me, MEMBER.email);
+    const theirs = await beto.add("Lo que hizo Beto", "hecho");
+    await me.edit(theirs.id, { assigneeId: betoId });
+    const link = await me.call<ReportLink>("/api/report-links", "POST", { memberId: betoId });
+    expect(link.member).toEqual({ id: betoId, name: MEMBER.name });
 
-    const links = await me.call<ReportLink[]>("/api/report-links");
+    const html = await (await report(link.token)).text();
+    expect(html).toContain(">Beto Prueba</h1>");
+    expect(html).toContain("Informe semanal · Ana Prueba");
+    expect(html).toContain("Lo que hizo Beto");
+    expect(html).not.toContain("Publicar la API");
+    expect(html).not.toContain("Trabajo en marcha");
+  });
+
+  it("stops working when the member leaves, and their cards lose the assignee", async () => {
+    const { me } = await seeded();
+    await joined(me);
+    const betoId = await idOf(me, MEMBER.email);
+    const card = await me.add("Asignada a Beto", "en_curso");
+    await me.edit(card.id, { assigneeId: betoId });
+    const link = await me.call<ReportLink>("/api/report-links", "POST", { memberId: betoId });
+
+    await me.call(`/api/members/${betoId}`, "DELETE");
+    expect((await report(link.token)).status).toBe(404);
+    expect((await me.board()).cards.find((c) => c.id === card.id)?.assigneeId).toBeNull();
+  });
+
+  it("answers 404 for someone outside the workspace", async () => {
+    const { me } = await seeded();
+    const stranger = await member();
+    const strangerId = (await stranger.me()).id;
+    expect(await me.status("/api/report-links", "POST", { memberId: strangerId })).toBe(404);
+  });
+});
+
+describe("assignee", () => {
+  it("lists the members on the board and accepts only one of them", async () => {
+    const { me } = await seeded();
+    await joined(me);
+    const betoId = await idOf(me, MEMBER.email);
+    const board = await me.board();
+    expect(board.members.map((m) => m.name)).toEqual(["Ana Prueba", "Beto Prueba"]);
+
+    const card = await me.add("Para Beto", "pendiente");
+    expect((await me.edit(card.id, { assigneeId: betoId })).assigneeId).toBe(betoId);
+    expect((await me.edit(card.id, { assigneeId: null })).assigneeId).toBeNull();
+
+    const stranger = await member({ email: "carla@example.com", name: "Carla Prueba" });
+    const strangerId = (await stranger.me()).id;
+    expect(await me.status(`/api/cards/${card.id}`, "PATCH", { assigneeId: strangerId })).toBe(400);
+  });
+});
+
+describe("report links", () => {
+  it("lists the whole-workspace link first, then each scoped link", async () => {
+    const { me, development, token } = await seeded();
+    await joined(me);
+    const betoId = await idOf(me, MEMBER.email);
+    const byLabel = await me.call<ReportLink>("/api/report-links", "POST", { labelId: development.id });
+    const byMember = await me.call<ReportLink>("/api/report-links", "POST", { memberId: betoId });
+
+    const links = await me.reportLinks();
+    expect(links[0]).toMatchObject({ token, label: null, member: null });
     const byId = new Map(links.map((l) => [l.id, l]));
-    expect(byId.get(whole.id)?.label).toBeNull();
-    expect(byId.get(whole.id)?.token).toBe(whole.token);
-    expect(byId.get(scoped.id)?.label?.name).toBe("Desarrollo");
+    expect(links).toHaveLength(3);
+    expect(byId.get(byLabel.id)?.label?.name).toBe("Desarrollo");
+    expect(byId.get(byMember.id)?.member?.name).toBe("Beto Prueba");
+  });
+
+  it("keeps one whole-workspace link, even when two tabs list at once", async () => {
+    const { me } = await seeded();
+    await Promise.all([me.reportLinks(), me.reportLinks()]);
+    const wholes = (await me.reportLinks()).filter((l) => !l.label && !l.member);
+    expect(wholes).toHaveLength(1);
+  });
+
+  it("refuses to delete the whole-workspace link", async () => {
+    const { me } = await seeded();
+    const [whole] = await me.reportLinks();
+    expect(await me.status(`/api/report-links/${whole!.id}`, "DELETE")).toBe(409);
+    expect((await report(whole!.token)).status).toBe(200);
+  });
+
+  it("asks for exactly one scope", async () => {
+    const { me, development } = await seeded();
+    const betoId = (await me.me()).id;
+    expect(await me.status("/api/report-links", "POST", {})).toBe(400);
+    expect(await me.status("/api/report-links", "POST", { labelId: development.id, memberId: betoId })).toBe(
+      400,
+    );
   });
 
   it("allows only one link per label", async () => {
@@ -220,21 +302,18 @@ describe("report links", () => {
   it("answers 404 for links of another workspace", async () => {
     const { me } = await seeded();
     const beto = await member();
-    const links = await beto.call<ReportLink[]>("/api/report-links");
-    expect(await beto.call<ReportLink>("/api/report-links", "POST", {})).toBeTruthy();
-    const foreign = links[0] ?? (await beto.call<ReportLink[]>("/api/report-links"))[0]!;
-    expect(await me.status(`/api/report-links/${foreign.id}/token`, "POST")).toBe(404);
-    expect(await me.status(`/api/report-links/${foreign.id}`, "DELETE")).toBe(404);
+    const [foreign] = await beto.reportLinks();
+    expect(await me.status(`/api/report-links/${foreign!.id}/token`, "POST")).toBe(404);
+    expect(await me.status(`/api/report-links/${foreign!.id}`, "DELETE")).toBe(404);
   });
 
-  it("needs the owner role to create, regenerate or delete", async () => {
+  it("lets every member list, and only an owner create, regenerate or delete", async () => {
     const { me, development } = await seeded();
     const beto = await joined(me);
-    expect((await beto.call<ReportLink[]>("/api/report-links")).length).toBeGreaterThan(0);
+    expect((await beto.reportLinks()).length).toBeGreaterThan(0);
     expect(await beto.status("/api/report-links", "POST", { labelId: development.id })).toBe(403);
-    expect(await beto.status("/api/report-links", "POST", {})).toBe(403);
 
-    const link = await me.call<ReportLink>("/api/report-links", "POST", {});
+    const link = await me.call<ReportLink>("/api/report-links", "POST", { labelId: development.id });
     expect(await beto.status(`/api/report-links/${link.id}/token`, "POST")).toBe(403);
     expect(await beto.status(`/api/report-links/${link.id}`, "DELETE")).toBe(403);
   });
@@ -246,36 +325,20 @@ describe("report links", () => {
   });
 });
 
-describe("report token", () => {
-  it("is long, random and stable until regenerated", async () => {
+describe("the whole-workspace token", () => {
+  it("is long and stable until regenerated", async () => {
     const { me, token } = await seeded();
     expect(token.length).toBeGreaterThanOrEqual(43); // 256 bits in base64url
-    expect((await me.workspaceSettings()).reportToken).toBe(token);
-    const links = await me.call<ReportLink[]>("/api/report-links");
-    expect(links.filter((l) => l.label === null).map((l) => l.token)).toContain(token);
-  });
-
-  it("regenerating kills the old link and opens the new one", async () => {
-    const { me, token } = await seeded();
-    const fresh = await me.call<{ reportToken: string }>("/api/workspace/report-token", "POST");
-    expect(fresh.reportToken).not.toBe(token);
-    expect((await report(token)).status).toBe(404);
-    expect((await report(fresh.reportToken)).status).toBe(200);
-    expect((await me.workspaceSettings()).reportToken).toBe(fresh.reportToken);
+    expect(await me.wholeReportToken()).toBe(token);
   });
 
   it("keeps exactly one working link when two tabs regenerate at once", async () => {
-    const { me } = await seeded();
-    const regenerate = () => me.call<{ reportToken: string }>("/api/workspace/report-token", "POST");
-    const tokens = (await Promise.all([regenerate(), regenerate()])).map((s) => s.reportToken);
-    const statuses = await Promise.all(tokens.map(async (t) => (await report(t)).status));
-    expect(statuses.toSorted()).toEqual([200, 404]);
-    expect(tokens).toContain((await me.workspaceSettings()).reportToken);
-  });
-
-  it("needs a session to read or regenerate", async () => {
-    await seeded();
-    expect((await send("/api/workspace")).status).toBe(401);
-    expect((await send("/api/workspace/report-token", { method: "POST" })).status).toBe(401);
+    const { me, token } = await seeded();
+    const [whole] = await me.reportLinks();
+    const regenerate = () => me.call<ReportLink>(`/api/report-links/${whole!.id}/token`, "POST");
+    const tokens = (await Promise.all([regenerate(), regenerate()])).map((l) => l.token);
+    const statuses = await Promise.all([token, ...tokens].map(async (t) => (await report(t)).status));
+    expect(statuses.toSorted()).toEqual([200, 404, 404]);
+    expect(tokens).toContain(await me.wholeReportToken());
   });
 });

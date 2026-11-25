@@ -9,9 +9,9 @@ import type {
   LabelColor,
   Me,
   Member,
+  ReportLink,
   Workspace,
   WorkspaceRole,
-  WorkspaceSettings,
 } from "../src/shared/model";
 import { SESSION_COOKIE, sessionCookieValue } from "../src/worker/session-cookie";
 
@@ -92,7 +92,9 @@ export function clientFor(cookie: string, workspace?: string) {
     addLabel: (name: string, color: LabelColor = "green") =>
       call<Label>("/api/labels", "POST", { name, color }),
     me: () => call<Me>("/api/me"),
-    workspaceSettings: () => call<WorkspaceSettings>("/api/workspace"),
+    reportLinks: () => call<ReportLink[]>("/api/report-links"),
+    /** The token of the whole-workspace link, which `GET /api/report-links` lists first. */
+    wholeReportToken: async () => (await call<ReportLink[]>("/api/report-links"))[0]!.token,
     createWorkspace: (name: string) => call<Workspace>("/api/workspaces", "POST", { name }),
     tokens: () => call<ApiToken[]>("/api/tokens"),
     makeToken: (name: string) => call<IssuedToken>("/api/tokens", "POST", { name }),

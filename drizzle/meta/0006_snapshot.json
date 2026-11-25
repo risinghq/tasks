@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "84da69cc-cc32-4025-a5d8-480e367d827a",
+  "id": "ffef04c6-c28a-4e4b-b6a9-50b4742b851a",
   "prevId": "1a46526a-ba29-42b2-a1d9-a0cb2a1d1e9a",
   "tables": {
     "api_tokens": {
@@ -145,6 +145,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "assignee_id": {
+          "name": "assignee_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "requester": {
           "name": "requester",
           "type": "text",
@@ -214,6 +221,19 @@
           "tableTo": "labels",
           "columnsFrom": [
             "label_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "cards_assignee_id_users_id_fk": {
+          "name": "cards_assignee_id_users_id_fk",
+          "tableFrom": "cards",
+          "tableTo": "users",
+          "columnsFrom": [
+            "assignee_id"
           ],
           "columnsTo": [
             "id"
@@ -398,10 +418,26 @@
           ],
           "isUnique": false
         },
+        "report_links_whole": {
+          "name": "report_links_whole",
+          "columns": [
+            "workspace_id"
+          ],
+          "isUnique": true,
+          "where": "\"report_links\".\"label_id\" is null and \"report_links\".\"member_id\" is null"
+        },
         "report_links_label": {
           "name": "report_links_label",
           "columns": [
             "label_id"
+          ],
+          "isUnique": true
+        },
+        "report_links_member": {
+          "name": "report_links_member",
+          "columns": [
+            "workspace_id",
+            "member_id"
           ],
           "isUnique": true
         }
@@ -449,7 +485,12 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "checkConstraints": {
+        "report_links_one_scope": {
+          "name": "report_links_one_scope",
+          "value": "\"report_links\".\"label_id\" is null or \"report_links\".\"member_id\" is null"
+        }
+      }
     },
     "users": {
       "name": "users",

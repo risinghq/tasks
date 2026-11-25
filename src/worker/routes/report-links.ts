@@ -13,9 +13,7 @@ reportLinkRoutes.get("/", async (c) =>
 );
 
 reportLinkRoutes.post("/", requireOwner, zValidator("json", createReportLinkSchema), async (c) => {
-  const link = await reportLinksOf(connect(c.env), c.get("workspace").id).create(
-    c.req.valid("json").labelId ?? null,
-  );
+  const link = await reportLinksOf(connect(c.env), c.get("workspace").id).create(c.req.valid("json"));
   return link ? c.json(link, 201) : c.json({ error: "not found" }, 404);
 });
 

@@ -9,12 +9,12 @@ export type ReportData = {
   token: string;
   week: string;
   currentWeek: string;
-  /** What the link shows: the label's name, or the workspace's name. */
+  /** What the link shows: the label's, the member's or the workspace's name. */
   scopeName: string;
-  /** The workspace's owner, named under the title. */
-  ownerName: string;
-  /** True for a whole-workspace link: each row names its label. */
-  wholeWorkspace: boolean;
+  /** The line under the title: whose report it is. */
+  subtitle: string;
+  /** Each row names its label, except on a label link where they all share one. */
+  showLabels: boolean;
   today: string;
   /** The page address the copy button shows, without the scheme. */
   url: string;
@@ -95,7 +95,7 @@ function ReportRow(props: {
   kind: "done" | "open" | "next";
   today: string;
   labels: Label[];
-  wholeWorkspace: boolean;
+  showLabels: boolean;
 }) {
   const { card, kind, labels } = props;
   const total = card.checklist.length;
@@ -110,7 +110,7 @@ function ReportRow(props: {
       <span class="row-main">
         <span class="row-head">
           <span class="row-title">{card.title}</span>
-          {props.wholeWorkspace && <LabelTag label={label} />}
+          {props.showLabels && <LabelTag label={label} />}
         </span>
         {summary && <span class="row-desc">{summary}</span>}
         {(card.requester || (kind === "open" && total > 0)) && (
@@ -144,7 +144,7 @@ export function ReportPage(props: ReportData) {
   const isCurrent = props.open !== null;
   const inProgress = (props.open ?? []).filter((card) => card.list === "en_curso");
   const next = (props.open ?? []).filter((card) => card.list === "esta_semana");
-  const rowProps = { today: props.today, labels, wholeWorkspace: props.wholeWorkspace };
+  const rowProps = { today: props.today, labels, showLabels: props.showLabels };
 
   return (
     <Document title={`${props.scopeName} · Informe ${weekRangeLabel(week)}`} css={css}>
@@ -163,7 +163,7 @@ export function ReportPage(props: ReportData) {
       </header>
       <main class="column">
         <h1 class="scope">{props.scopeName}</h1>
-        <p class="sub">Informe semanal de {props.ownerName}</p>
+        <p class="sub">{props.subtitle}</p>
         <div class="week-bar">
           <p class="week">
             Semana {weekNumber(week)} · {weekRangeLabel(week)}

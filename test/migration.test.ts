@@ -101,8 +101,7 @@ describe("the accounts migration on a database with data", () => {
       // The report_token column is gone. The workspace's link is created on
       // demand, so the old shared address no longer opens.
       expect((await send(`/r/${OLD_TOKEN}`)).status).toBe(404);
-      const { reportToken } = await me.workspaceSettings();
-      const report = await send(`/r/${reportToken}?semana=2026-W42`);
+      const report = await send(`/r/${await me.wholeReportToken()}?semana=2026-W42`);
       expect(report.status).toBe(200);
       expect(await report.text()).toContain("Terminada sin etiqueta");
     } finally {

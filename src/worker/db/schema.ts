@@ -1,5 +1,14 @@
 import { sql } from "drizzle-orm";
-import { check, index, integer, primaryKey, sqliteTable, text, unique } from "drizzle-orm/sqlite-core";
+import {
+  check,
+  index,
+  integer,
+  primaryKey,
+  sqliteTable,
+  text,
+  unique,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
 import {
   LABEL_COLORS,
   LISTS,
@@ -74,6 +83,8 @@ export const cards = sqliteTable(
     title: text().notNull(),
     description: text().notNull().default(""),
     labelId: text("label_id").references(() => labels.id, { onDelete: "set null" }),
+    /** The member who does the card. Removing the member clears it in workspaces.ts. */
+    assigneeId: text("assignee_id").references(() => users.id, { onDelete: "set null" }),
     requester: text(),
     checklist: text({ mode: "json" }).$type<ChecklistItem[]>().notNull().default([]),
     list: text({ enum: LISTS }).$type<ListId>().notNull(),
@@ -88,8 +99,8 @@ export const cards = sqliteTable(
 
 /**
  * One shared read-only link to the weekly report. `label_id` limits the report
- * to the cards of one label; null shows the whole workspace. `member_id` is
- * reserved for a per-person scope and is not used yet.
+ * to the cards of one label, `member_id` to the cards assigned to one member.
+ * With both null the link shows the whole workspace.
  */
 export const reportLinks = sqliteTable(
   "report_links",
@@ -111,6 +122,12 @@ export const reportLinks = sqliteTable(
     index("report_links_workspace").on(table.workspaceId),
     /** At most one link per label. Nulls do not conflict. */
     unique("report_links_label").on(table.labelId),
+    unique("report_links_member").on(table.workspaceId, table.memberId),
+    /** One whole-workspace link per workspace, created on demand. */
+    uniqueIndex("report_links_whole")
+      .on(table.workspaceId)
+      .where(sql`${table.labelId} is null and ${table.memberId} is null`),
+    check("report_links_one_scope", sql`${table.labelId} is null or ${table.memberId} is null`),
   ],
 );
 

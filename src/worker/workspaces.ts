@@ -148,7 +148,10 @@ export async function setRole(
   return changed.length > 0;
 }
 
-/** Removes a member and their tokens for this workspace. Returns false when that would leave no owner. */
+/**
+ * Removes a member with their tokens, their report link and their assignments
+ * in this workspace. Returns false when that would leave no owner.
+ */
 export async function removeMember(db: Db, workspaceId: string, userId: string): Promise<boolean> {
   const removed = await db
     .delete(workspaceMembers)
@@ -161,6 +164,10 @@ export async function removeMember(db: Db, workspaceId: string, userId: string):
     )
     .returning({ userId: workspaceMembers.userId });
   if (removed.length === 0) return false;
-  await db.run(sql`delete from api_tokens where workspace_id = ${workspaceId} and user_id = ${userId}`);
+  await batch(db, [
+    sql`delete from api_tokens where workspace_id = ${workspaceId} and user_id = ${userId}`,
+    sql`delete from report_links where workspace_id = ${workspaceId} and member_id = ${userId}`,
+    sql`update cards set assignee_id = null where workspace_id = ${workspaceId} and assignee_id = ${userId}`,
+  ]);
   return true;
 }

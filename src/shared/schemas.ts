@@ -56,13 +56,17 @@ export const apiListCardsSchema = z.object({
 
 export const createTokenSchema = z.object({ name: z.string().trim().min(1).max(80) });
 
-/** A report link for the whole workspace (`labelId` absent or null) or for one label. */
-export const createReportLinkSchema = z.object({ labelId: rowId.nullable().optional() });
+/** A report link for one label or one member. The whole-workspace link always exists. */
+export const createReportLinkSchema = z.union([
+  z.strictObject({ labelId: rowId }),
+  z.strictObject({ memberId: rowId }),
+]);
 
 export const updateCardSchema = z.object({
   title: title.optional(),
   description: description.optional(),
   labelId: rowId.nullable().optional(),
+  assigneeId: rowId.nullable().optional(),
   requester: requester.optional(),
   checklist: checklist.optional(),
   list: z.enum(LISTS).optional(),
@@ -104,3 +108,4 @@ export type UpdateCard = z.infer<typeof updateCardSchema>;
 export type MoveCard = z.infer<typeof moveCardSchema>;
 export type CreateLabel = z.infer<typeof createLabelSchema>;
 export type UpdateLabel = z.infer<typeof updateLabelSchema>;
+export type CreateReportLink = z.infer<typeof createReportLinkSchema>;

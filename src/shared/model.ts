@@ -51,6 +51,8 @@ export type Card = {
   description: string;
   /** The card's label, or null. A card without a label shows no stripe. */
   labelId: string | null;
+  /** The member who does the card, or null. */
+  assigneeId: string | null;
   requester: string | null;
   checklist: ChecklistItem[];
   list: ListId;
@@ -66,7 +68,11 @@ export type Board = {
   labels: Label[];
   olderWeek: string | null;
   requesters: string[];
+  /** Who a card can be assigned to, by name. */
+  members: Person[];
 };
+
+export type Person = { id: string; name: string };
 
 export type DoneWeek = {
   week: string;
@@ -85,14 +91,18 @@ export type Me = {
   workspaces: (Workspace & { openCount: number })[];
 };
 
-/** What Ajustes shows about the current workspace. */
-export type WorkspaceSettings = Workspace & { reportToken: string };
-
 /**
- * A shared read-only link to the weekly report. `label` is null for a
- * whole-workspace link. `createdAt` is unix seconds.
+ * A shared read-only link to the weekly report. It shows one label's cards,
+ * one member's cards, or with both null the whole workspace. `createdAt` is
+ * unix seconds.
  */
-export type ReportLink = { id: string; token: string; label: Label | null; createdAt: number };
+export type ReportLink = {
+  id: string;
+  token: string;
+  label: Label | null;
+  member: Person | null;
+  createdAt: number;
+};
 
 export type Member = { id: string; name: string; email: string; role: WorkspaceRole };
 

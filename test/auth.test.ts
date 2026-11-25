@@ -264,9 +264,7 @@ describe("workspaces", () => {
     expect((await me.board()).cards.map((c) => c.title)).toEqual(["Personal"]);
     expect((await me.board()).labels).toEqual([]);
     expect((await me.in(company).board()).cards.map((c) => c.title)).toEqual(["De la empresa"]);
-    const tokens = [await me.workspaceSettings(), await me.in(company).workspaceSettings()].map(
-      (w) => w.reportToken,
-    );
+    const tokens = [await me.wholeReportToken(), await me.in(company).wholeReportToken()];
     expect(new Set(tokens).size).toBe(2);
   });
 
@@ -375,7 +373,6 @@ describe("members", () => {
     expect(await beto.status(`/api/members/${id}`, "DELETE")).toBe(403);
     expect(await beto.status("/api/workspace", "PATCH", { name: "Mía" })).toBe(403);
     expect(await beto.status("/api/workspace", "DELETE")).toBe(403);
-    expect(await beto.status("/api/workspace/report-token", "POST")).toBe(403);
     expect(await me.members()).toHaveLength(2);
   });
 
