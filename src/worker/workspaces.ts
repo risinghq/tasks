@@ -5,42 +5,32 @@ import { batch, isUniqueViolation, type Db } from "./db/client";
 import { cards, users, workspaceMembers, workspaces } from "./db/schema";
 
 /**
- * A user's personal workspace has the user's own id, so a default board needs
- * no lookup. It is the one a request uses when it names no workspace.
+ * Creates a user and their personal workspace in one transaction. The personal
+ * workspace has the user's own id, so a default board needs no lookup, and the
+ * user's name, so a member's menu and a report tell two people's boards apart.
  */
-export const PERSONAL_NAME = "Personal";
-
-/** Creates a user and their personal workspace in one transaction. */
 export async function createPersonalWorkspace(
   db: Db,
   person: { id: string; email: string; name: string },
 ): Promise<void> {
   await batch(db, [
     db.insert(users).values(person),
-    db.insert(workspaces).values({ id: person.id, name: PERSONAL_NAME, createdAt: nowSeconds() }),
+    db.insert(workspaces).values({ id: person.id, name: person.name, createdAt: nowSeconds() }),
     db.insert(workspaceMembers).values({ workspaceId: person.id, userId: person.id, role: "owner" }),
   ]);
 }
-
-/**
- * The name a member sees. Someone else's personal workspace shows its owner's
- * name, because "Personal" would then name two boards in the same menu.
- */
-const shownName = (userId: string) =>
-  sql<string>`case when ${workspaces.id} = ${userId} then ${workspaces.name} else coalesce(${users.name}, ${workspaces.name}) end`;
 
 /** Every workspace the user belongs to, with its open-card count. Their personal one comes first. */
 export function workspacesOf(db: Db, userId: string): Promise<(Workspace & { openCount: number })[]> {
   return db
     .select({
       id: workspaces.id,
-      name: shownName(userId),
+      name: workspaces.name,
       role: workspaceMembers.role,
       openCount: sql<number>`(select count(*) from ${cards} where ${cards.workspaceId} = ${workspaces.id} and ${cards.list} <> 'hecho')`,
     })
     .from(workspaceMembers)
     .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
-    .leftJoin(users, eq(users.id, workspaces.id))
     .where(eq(workspaceMembers.userId, userId))
     .orderBy(sql`${workspaces.id} <> ${userId}`, asc(workspaces.createdAt), asc(workspaces.name));
 }
@@ -48,10 +38,9 @@ export function workspacesOf(db: Db, userId: string): Promise<(Workspace & { ope
 /** The workspace if the user belongs to it. */
 export function membership(db: Db, workspaceId: string, userId: string): Promise<Workspace | undefined> {
   return db
-    .select({ id: workspaces.id, name: shownName(userId), role: workspaceMembers.role })
+    .select({ id: workspaces.id, name: workspaces.name, role: workspaceMembers.role })
     .from(workspaceMembers)
     .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
-    .leftJoin(users, eq(users.id, workspaces.id))
     .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, userId)))
     .get();
 }

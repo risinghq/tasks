@@ -68,15 +68,7 @@ textarea.input {
   white-space: nowrap;
   transition:
     background-color var(--duration-fast) var(--ease-out),
-    transform var(--duration-fast) var(--ease-out);
-}
-
-.primary:active,
-.secondary:active,
-.ghost:active,
-.danger:active,
-.destroy:active {
-  transform: scale(0.97);
+    scale var(--duration-fast) var(--ease-out);
 }
 
 .primary {

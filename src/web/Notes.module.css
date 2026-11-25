@@ -63,6 +63,13 @@
   color: var(--text-muted);
 }
 
+/* iOS zooms the page into a field whose text is under 16px. */
+@media (pointer: coarse) {
+  .capture {
+    font-size: var(--text-base);
+  }
+}
+
 .capture:focus-visible {
   outline: 0;
 }
@@ -308,6 +315,12 @@
   line-height: var(--leading);
   resize: none;
   overflow: hidden;
+}
+
+@media (pointer: coarse) {
+  .edit {
+    font-size: var(--text-base);
+  }
 }
 
 .edit:focus-visible {

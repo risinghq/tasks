@@ -170,7 +170,9 @@ describe("signing in with Google", () => {
     const me = clientFor(sessionOf(res)!.split(";")[0]!);
     const profile = await me.me();
     expect(profile).toMatchObject({ email: "nueva@example.com", name: "Nueva Persona" });
-    expect(profile.workspaces).toEqual([{ id: profile.id, name: "Personal", role: "owner", openCount: 0 }]);
+    expect(profile.workspaces).toEqual([
+      { id: profile.id, name: "Nueva Persona", role: "owner", openCount: 0 },
+    ]);
     expect(await me.board()).toMatchObject({ cards: [], labels: [] });
   });
 
@@ -249,6 +251,17 @@ describe("own account", () => {
     expect(await me.call("/api/me", "PATCH", { name: "Ana Nueva" })).toMatchObject({ name: "Ana Nueva" });
     expect((await me.me()).name).toBe("Ana Nueva");
   });
+
+  it("renames the personal workspace with the user, unless it was given its own name", async () => {
+    const me = await admin();
+    const personal = async () => (await me.me()).workspaces[0]!.name;
+    await me.call("/api/me", "PATCH", { name: "Ana Nueva" });
+    expect(await personal()).toBe("Ana Nueva");
+
+    await me.call("/api/workspace", "PATCH", { name: "Freelance" });
+    await me.call("/api/me", "PATCH", { name: "Ana Otra" });
+    expect(await personal()).toBe("Freelance");
+  });
 });
 
 describe("workspaces", () => {
@@ -257,7 +270,7 @@ describe("workspaces", () => {
     const company = await me.createWorkspace("Empresa A");
     expect(company).toMatchObject({ name: "Empresa A", role: "owner" });
     const names = (await me.me()).workspaces.map((w) => w.name);
-    expect(names).toEqual(["Personal", "Empresa A"]);
+    expect(names).toEqual([ADMIN.name, "Empresa A"]);
   });
 
   it("keeps each workspace's cards, labels and report apart", async () => {
@@ -293,7 +306,7 @@ describe("workspaces", () => {
     expect(await company.status("/api/workspace", "DELETE")).toBe(204);
     expect(await company.status("/api/board")).toBe(403);
     expect(await env.DB.prepare("SELECT count(*) AS n FROM cards").first("n")).toBe(0);
-    expect((await me.me()).workspaces.map((w) => w.name)).toEqual(["Personal"]);
+    expect((await me.me()).workspaces.map((w) => w.name)).toEqual([ADMIN.name]);
   });
 
   it("does not delete the personal workspace", async () => {
@@ -330,8 +343,8 @@ describe("members", () => {
     const beto = clientFor(await signIn(added.id));
     expect(await beto.board()).toMatchObject({ cards: [], labels: [] });
     expect((await beto.in((await me.me()).id).board()).cards.map((c) => c.title)).toEqual(["Compartida"]);
-    // Ana's personal board shows under her name, so the two are told apart.
-    expect((await beto.me()).workspaces.map((w) => w.name)).toEqual(["Personal", ADMIN.name]);
+    // Each personal board has its owner's name, so the two are told apart.
+    expect((await beto.me()).workspaces.map((w) => w.name)).toEqual(["beto", ADMIN.name]);
   });
 
   it("lets a person who was added sign in with Google and find the workspace", async () => {

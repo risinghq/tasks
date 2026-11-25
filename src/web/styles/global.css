@@ -66,6 +66,11 @@ button {
   cursor: pointer;
 }
 
+/* Every button answers a press. `scale` composes with a component's own transform. */
+button:not(:disabled):active {
+  scale: 0.97;
+}
+
 strong,
 b {
   font-weight: var(--weight-strong);

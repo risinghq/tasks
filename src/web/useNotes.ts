@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Note } from "../shared/model";
-import type { NoteResult } from "./useBoard";
+import type { NoteResult } from "./noteWrites";
 
 export type NoteActions = {
   list: (cardId: string) => Promise<Note[] | null>;

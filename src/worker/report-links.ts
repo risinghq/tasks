@@ -153,19 +153,14 @@ export async function reportLinkByToken(db: Db, token: string): Promise<Resolved
     .get();
 }
 
-/**
- * What the report header shows about a workspace: its name (a personal one
- * reports under its owner's name, because "Personal" means nothing to a
- * reader) and the name of its first owner.
- */
+/** What the report header shows about a workspace: its name and the name of its first owner. */
 export async function workspaceForReport(
   db: Db,
   workspaceId: string,
 ): Promise<{ name: string; ownerName: string } | undefined> {
   const row = await db
-    .select({ name: sql<string>`coalesce(${users.name}, ${workspaces.name})` })
+    .select({ name: workspaces.name })
     .from(workspaces)
-    .leftJoin(users, eq(users.id, workspaces.id))
     .where(eq(workspaces.id, workspaceId))
     .get();
   if (!row) return undefined;

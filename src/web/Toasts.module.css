@@ -39,7 +39,7 @@
   color: inherit;
   transition:
     background-color var(--duration-fast) var(--ease-out),
-    transform var(--duration-fast) var(--ease-out);
+    scale var(--duration-fast) var(--ease-out);
 }
 
 .action {
@@ -55,7 +55,6 @@
 .action:active,
 .close:active {
   background: var(--inverse-hover);
-  transform: scale(0.97);
 }
 
 @media (hover: hover) and (pointer: fine) {

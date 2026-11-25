@@ -8,11 +8,7 @@
   background: transparent;
   transition:
     background-color var(--duration-fast) var(--ease-out),
-    transform var(--duration-fast) var(--ease-out);
-}
-
-.trigger:active {
-  transform: scale(0.96);
+    scale var(--duration-fast) var(--ease-out);
 }
 
 @media (hover: hover) and (pointer: fine) {

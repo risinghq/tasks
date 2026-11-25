@@ -34,5 +34,9 @@ export function useAccount() {
   /** The name the menu shows: the workspace's own name unless it is the personal one. */
   const shownName = workspace && me && workspace.id !== me.id ? workspace.name : (me?.name ?? null);
 
-  return { me, setMe, workspace, renameWorkspace, switchWorkspace, shownName };
+  // Renaming the user can rename their personal workspace, and the server
+  // answers that with a new `me`, so its list holds the current name.
+  const current = workspace && { ...workspace, ...me?.workspaces.find((w) => w.id === workspace.id) };
+
+  return { me, setMe, workspace: current, renameWorkspace, switchWorkspace, shownName };
 }

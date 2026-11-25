@@ -102,7 +102,7 @@
   --neutral-7: light-dark(oklch(0.845 0.015 var(--hue)), oklch(0.41 0.018 var(--hue)));
   --neutral-8: light-dark(oklch(0.76 0.017 var(--hue)), oklch(0.5 0.019 var(--hue)));
   --neutral-9: light-dark(oklch(0.56 0.018 var(--hue)), oklch(0.58 0.019 var(--hue)));
-  --neutral-10: light-dark(oklch(0.52 0.019 var(--hue)), oklch(0.64 0.019 var(--hue)));
+  --neutral-10: light-dark(oklch(0.52 0.019 var(--hue)), oklch(0.68 0.019 var(--hue)));
   --neutral-11: light-dark(oklch(0.45 0.02 var(--hue)), oklch(0.79 0.017 var(--hue)));
   --neutral-12: light-dark(oklch(0.25 0.02 var(--hue)), oklch(0.95 0.01 var(--hue)));
 

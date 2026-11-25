@@ -169,8 +169,7 @@ export function Board() {
   const dragged = drag.dragging && drag.cards.find((card) => card.id === drag.dragging?.id);
   const shared = { cards: drag.cards, dragging: drag.dragging !== null, filtering, current: tab };
   const criteria = countCriteria(filter);
-  const workspaceName =
-    me?.workspaces.find((w) => w.id === workspace?.id)?.name ?? workspace?.name ?? "Espacio";
+  const workspaceName = workspace?.name ?? "Espacio";
   const openCount = board.cards.filter((card) => card.list !== "hecho").length;
 
   return (

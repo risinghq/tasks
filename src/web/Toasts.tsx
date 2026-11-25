@@ -1,6 +1,6 @@
 import { X } from "lucide-react";
 import styles from "./Toasts.module.css";
-import type { Toast } from "./useBoard";
+import type { Toast } from "./useToasts";
 
 export function Toasts(props: { toasts: Toast[]; onClose: (id: number) => void }) {
   return (

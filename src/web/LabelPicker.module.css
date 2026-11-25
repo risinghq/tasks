@@ -18,11 +18,7 @@
   overflow-wrap: anywhere;
   transition:
     filter var(--duration-fast) var(--ease-out),
-    transform var(--duration-fast) var(--ease-out);
-}
-
-.label:active {
-  transform: scale(0.97);
+    scale var(--duration-fast) var(--ease-out);
 }
 
 @media (hover: hover) and (pointer: fine) {
