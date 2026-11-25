@@ -13,40 +13,6 @@
   animation: appear var(--duration-slow) var(--ease-out);
 }
 
-/* Covers the dialog while files are dragged over it. It must not catch the drag itself. */
-.drop {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  background: color-mix(in oklch, var(--overlay) 93%, transparent);
-  pointer-events: none;
-}
-
-.dropBox {
-  position: absolute;
-  inset: var(--space-3);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  padding: var(--space-6);
-  border: 2px dashed var(--text-accent);
-  border-radius: var(--radius-lg);
-  text-align: center;
-}
-
-.dropTitle {
-  font-size: var(--text-xl);
-  line-height: var(--leading-tight);
-  font-weight: var(--weight-strong);
-}
-
-.dropHint {
-  font-size: var(--text-sm);
-  color: var(--text-muted);
-}
-
 .dialog::backdrop {
   background: var(--scrim);
 }
@@ -106,7 +72,7 @@
 }
 
 .barTitle {
-  font-size: 0.9375rem;
+  font-size: var(--text-base);
   font-weight: var(--weight-strong);
   color: var(--text);
 }
@@ -194,7 +160,7 @@
   border: 0;
   border-radius: var(--radius-md);
   background: transparent;
-  font-size: clamp(1.375rem, 1.8vw, 1.625rem);
+  font-size: var(--text-xl);
   line-height: var(--leading-tight);
   font-weight: var(--weight-strong);
   letter-spacing: -0.01em;
@@ -206,81 +172,6 @@
 .title:focus-visible {
   outline: 0;
   box-shadow: 0 0 0 3px var(--focus-ring);
-}
-
-.grid {
-  display: grid;
-  grid-template-columns: 7.5rem minmax(0, 1fr);
-  align-items: center;
-  row-gap: 2px;
-  padding-left: var(--space-1);
-  font-size: var(--text-sm);
-}
-
-.prop {
-  color: var(--text-muted);
-}
-
-.value {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  justify-self: start;
-  max-width: 100%;
-  height: 2.125rem;
-  margin-left: calc(var(--space-2) * -1);
-  padding: 0 var(--space-2);
-  border: 0;
-  border-radius: var(--radius-md);
-  background: transparent;
-  font-size: var(--text-sm);
-  overflow: hidden;
-  transition: background-color var(--duration-fast) var(--ease-out);
-}
-
-.value[data-empty="true"] {
-  color: var(--text-subtle);
-}
-
-.valueText {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .value:hover {
-    background: var(--hover);
-    color: var(--text);
-  }
-}
-
-.chevron {
-  flex: none;
-  color: var(--text-muted);
-}
-
-.avatar {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 1.25rem;
-  height: 1.25rem;
-  border-radius: var(--radius-full);
-  box-shadow: inset 0 0 0 1px var(--text-muted);
-  font-size: 0.625rem;
-  font-weight: 700;
-}
-
-/* As on the board: the person doing the work is filled, the one who asked is outlined. */
-.avatar[data-assignee] {
-  background: var(--accent-wash);
-  box-shadow: none;
-  color: var(--text-accent);
 }
 
 .addChecklist {
@@ -304,12 +195,6 @@
     background: var(--hover);
     color: var(--text);
   }
-}
-
-.pickerSheet {
-  width: var(--popover-width);
-  max-width: 100%;
-  padding: var(--space-1) var(--space-2) var(--space-2);
 }
 
 .menu {
@@ -416,16 +301,8 @@
     padding: var(--space-2) 1.25rem 2.5rem;
   }
 
-  .grid {
-    grid-template-columns: 6.75rem minmax(0, 1fr);
-  }
-
   /* The narrow bar has room for the title alone. */
   .bar[data-scrolled="true"] .barPlace {
     display: none;
-  }
-
-  .pickerSheet {
-    width: 100%;
   }
 }

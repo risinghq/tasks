@@ -36,15 +36,19 @@
 }
 
 :root {
-  /* Type */
+  /* Type. Every font size and weight in the app and the report is one of these. */
   font-family: "Inter", system-ui, sans-serif;
+  /* The initials in an avatar and the extension on a file badge: a mark, not text to read. */
+  --text-2xs: 0.625rem;
   --text-xs: 0.75rem;
   --text-sm: 0.875rem;
+  /* The least a text field takes: iOS zooms the page into a field under 16px. */
   --text-base: 1rem;
   --text-lg: 1.25rem;
   --text-xl: 1.5rem;
   --text-title: 2rem;
   --weight-regular: 400;
+  --weight-medium: 500;
   --weight-strong: 600;
   --leading: 1.5;
   --leading-tight: 1.25;

@@ -1,13 +1,14 @@
 import { DndContext, DragOverlay } from "@dnd-kit/core";
-import { Filter as FilterIcon, Share } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { LISTS, LIST_TITLES, type ListId } from "../shared/model";
+import { useEffect, useMemo, useState } from "react";
+import type { ListId } from "../shared/model";
 import styles from "./Board.module.css";
+import { BoardHeader, shownFilterButton } from "./BoardHeader";
 import { CardBack } from "./CardBack";
 import { CardFace } from "./CardView";
 import { FilterPopover } from "./FilterPopover";
 import { inContainer, parseContainerId } from "./groups";
 import { DoneColumn, FlatColumn } from "./ListColumn";
+import { ListTabs } from "./ListTabs";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { noteContent } from "./noteInput";
 import { QuickEdit } from "./QuickEdit";
@@ -16,8 +17,6 @@ import { ShareDialog } from "./ShareDialog";
 import { ShortcutsDialog } from "./ShortcutsDialog";
 import { Toasts } from "./Toasts";
 import { UiContext, type Ui } from "./ui";
-import { UserMenu } from "./UserMenu";
-import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { useBoard } from "./useBoard";
 import { useCardFileDrop } from "./useCardFileDrop";
 import { useCardRoute } from "./useCardRoute";
@@ -46,8 +45,6 @@ export function Board() {
   const { me, setMe, workspace, renameWorkspace, switchWorkspace, shownName } = useAccount();
   // The narrow layout shows one list at a time.
   const [tab, setTab] = useState<ListId>("en_curso");
-  const filterWide = useRef<HTMLButtonElement>(null);
-  const filterIcon = useRef<HTMLButtonElement>(null);
   const [filterAnchor, setFilterAnchor] = useState<HTMLElement | null>(null);
 
   const shown = useMemo(() => board.cards.filter((card) => matches(card, filter)), [board.cards, filter]);
@@ -144,7 +141,7 @@ export function Board() {
 
   /** The keyboard 'f' opens the filter anchored to whichever button is showing. */
   const openFilter = (from?: HTMLElement | null) => {
-    setFilterAnchor(from ?? (filterWide.current?.offsetParent ? filterWide.current : filterIcon.current));
+    setFilterAnchor(from ?? shownFilterButton());
     setFilterOpen(true);
   };
 
@@ -168,84 +165,28 @@ export function Board() {
 
   const dragged = drag.dragging && drag.cards.find((card) => card.id === drag.dragging?.id);
   const shared = { cards: drag.cards, dragging: drag.dragging !== null, filtering, current: tab };
-  const criteria = countCriteria(filter);
   const workspaceName = workspace?.name ?? "Espacio";
   const openCount = board.cards.filter((card) => card.list !== "hecho").length;
 
   return (
     <UiContext.Provider value={ui}>
       <div className={styles.page} {...pointer} {...fileDrop.props}>
-        <header className={styles.header}>
-          <div className={styles.left}>
-            <h1 className={styles.title}>
-              <WorkspaceSwitcher
-                workspaces={me?.workspaces ?? []}
-                currentId={workspace?.id ?? null}
-                name={workspaceName}
-                openCount={openCount}
-                onShare={() => setShareOpen(true)}
-                onSwitch={switchWorkspace}
-                onNewWorkspace={() => setNewWorkspaceOpen(true)}
-              />
-            </h1>
-            <span className={styles.divider} aria-hidden />
-            <button
-              ref={filterWide}
-              type="button"
-              className={styles.filter}
-              data-active={filtering}
-              aria-haspopup="dialog"
-              aria-expanded={filterOpen}
-              onClick={(event) => (filterOpen ? setFilterOpen(false) : openFilter(event.currentTarget))}
-            >
-              <FilterIcon size={16} aria-hidden /> Filtrar
-              {criteria > 0 && <span className={styles.filterCount}>{criteria}</span>}
-            </button>
-          </div>
-          <div className={styles.actions}>
-            <button type="button" className={styles.report} onClick={() => setShareOpen(true)}>
-              <Share size={16} aria-hidden /> Compartir informe
-            </button>
-            <button
-              ref={filterIcon}
-              type="button"
-              className={styles.filterIcon}
-              aria-label="Filtrar"
-              aria-haspopup="dialog"
-              aria-expanded={filterOpen}
-              onClick={(event) => (filterOpen ? setFilterOpen(false) : openFilter(event.currentTarget))}
-            >
-              <FilterIcon size={16} aria-hidden />
-              {criteria > 0 && <span className={styles.filterDot} aria-hidden />}
-            </button>
-            <UserMenu
-              name={shownName}
-              email={me?.email ?? null}
-              onSettings={() => setSettingsOpen(true)}
-              onShortcuts={() => setHelpOpen(true)}
-            />
-          </div>
-        </header>
-
-        <nav className={styles.tabs} role="tablist" aria-label="Listas">
-          {LISTS.map((list) => (
-            <button
-              key={list}
-              type="button"
-              role="tab"
-              id={`tab-${list}`}
-              className={styles.tab}
-              aria-selected={tab === list}
-              aria-controls={`list-${list}`}
-              onClick={() => setTab(list)}
-            >
-              {LIST_TITLES[list]}
-              <span className={styles.tabCount}>
-                {drag.cards.filter((card) => card.list === list).length}
-              </span>
-            </button>
-          ))}
-        </nav>
+        <BoardHeader
+          me={me}
+          workspace={workspace}
+          workspaceName={workspaceName}
+          userName={shownName}
+          openCount={openCount}
+          criteria={countCriteria(filter)}
+          filterOpen={filterOpen}
+          onFilter={(anchor) => (filterOpen ? setFilterOpen(false) : openFilter(anchor))}
+          onShare={() => setShareOpen(true)}
+          onSwitch={switchWorkspace}
+          onNewWorkspace={() => setNewWorkspaceOpen(true)}
+          onSettings={() => setSettingsOpen(true)}
+          onShortcuts={() => setHelpOpen(true)}
+        />
+        <ListTabs cards={drag.cards} current={tab} onSelect={setTab} />
 
         {board.loadError && (
           <div className={styles.error} role="alert">

@@ -11,6 +11,7 @@ scripts      import-trello, prepare-dev, dev-account, log, og
 drizzle      generated migrations
 test         tests that drive the Worker over HTTP
 e2e          Playwright tests that drive the app in Chromium
+e2e/shots    screenshots for design review, outside `bun run check`
 ```
 
 ## Requests
@@ -301,10 +302,11 @@ never runs on the app's origin.
 In the browser, `noteWrites.ts` adds, edits and deletes notes, and `useBoard`
 keeps `noteCount` in step. A note on a card whose create is still pending waits
 for the create. Text longer than `NOTE_TEXT_MAX` becomes a `texto.txt` file.
-`useNotes` holds the card back's list. A paste outside a text field and a file
-drop become notes: on the card back anywhere (`useNoteTarget`), and on the board
-for the card under the pointer (`useShortcuts` for paste, `useCardFileDrop` for
-drop).
+`useNotes` holds the card back's list, which `Notes.tsx` shows with one
+`NoteEntry` per note. `CardProperties.tsx` holds the card back's property grid
+and its pickers. A paste outside a text field and a file drop become notes: on
+the card back anywhere (`useNoteTarget`), and on the board for the card under
+the pointer (`useShortcuts` for paste, `useCardFileDrop` for drop).
 
 ## Dates
 
@@ -395,20 +397,20 @@ They do nothing while the focus is in a text field or a modal is open.
 
 ### Layout
 
-The header holds the board title and Filtrar on the left, and Compartir informe
-and one user menu on the right, named with the person's name. The menu
-(`UserMenu.tsx`) offers Ajustes, Tema, Atajos de teclado and Salir. Under 768px
-Compartir informe moves into the workspace switcher.
+The header (`BoardHeader.tsx`) holds the board title and Filtrar on the left,
+and Compartir informe and one user menu on the right, named with the person's
+name. The menu (`UserMenu.tsx`) offers Ajustes, Tema, Atajos de teclado and
+Salir. Under 768px Compartir informe moves into the workspace switcher.
 
 From 768px the four lists sit side by side and shrink together, up to 17rem
 each, so the board never scrolls sideways. Each list has its count in the header
 and one composer at its foot. A list with no cards shows one line that names its
 next action, or "Sin coincidencias" while a filter is on.
 
-Under 768px a tab bar names the four lists and `Board.tsx` shows the one chosen,
-starting on En curso. The other lists are `display: none`, so on a narrow screen
-a card changes list through Mover on the card back. The chosen tab lives in
-memory only.
+Under 768px a tab bar (`ListTabs.tsx`) names the four lists and `Board.tsx`
+shows the one chosen, starting on En curso. The other lists are `display: none`,
+so on a narrow screen a card changes list through Mover on the card back. The
+chosen tab lives in memory only.
 
 ### Look
 

@@ -1,0 +1,33 @@
+/* Covers its positioned parent while files are dragged over it. It must not catch the drag itself. */
+.drop {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: color-mix(in oklch, var(--overlay) 93%, transparent);
+  pointer-events: none;
+}
+
+.box {
+  position: absolute;
+  inset: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-6);
+  border: 2px dashed var(--text-accent);
+  border-radius: var(--radius-lg);
+  text-align: center;
+}
+
+.title {
+  font-size: var(--text-xl);
+  line-height: var(--leading-tight);
+  font-weight: var(--weight-strong);
+}
+
+.hint {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}

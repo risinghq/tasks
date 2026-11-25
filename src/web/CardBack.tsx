@@ -1,20 +1,17 @@
-import { Check, ChevronDown, Ellipsis, Plus, X } from "lucide-react";
+import { Check, Ellipsis, Plus, X } from "lucide-react";
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { dayHeading } from "../shared/dates";
 import { LIST_TITLES, TITLE_MAX, type Card } from "../shared/model";
 import type { Fields } from "./boardState";
+import { CardProperties } from "./CardProperties";
 import { Checklist } from "./Checklist";
-import { LabelDot } from "./CardView";
 import { useModal } from "./Dialog";
 import { Description } from "./Description";
-import { LabelPicker } from "./LabelPicker";
-import { Notes, useNoteTarget } from "./Notes";
+import { NoteDrop, useNoteTarget } from "./NoteDrop";
+import { Notes } from "./Notes";
 import { useNotes, type NoteActions } from "./useNotes";
-import { AssigneePicker, DatePicker, ListPicker, RequesterPicker } from "./Pickers";
 import { Sheet } from "./Sheet";
 import styles from "./CardBack.module.css";
 import type { Container } from "./groups";
-import { useUi } from "./ui";
 import { useAutosize } from "./useAutosize";
 import { useEscape } from "./useEscape";
 
@@ -163,16 +160,6 @@ function useScrolledPast(
   return past;
 }
 
-type PickerKind = "lista" | "etiqueta" | "responsable" | "solicitante" | "fecha";
-
-const PICKER_LABEL: Record<PickerKind, string> = {
-  lista: "Lista",
-  etiqueta: "Etiqueta",
-  responsable: "Responsable",
-  solicitante: "Solicitante",
-  fecha: "Fecha de término",
-};
-
 export function CardBack(props: {
   card: Card;
   today: string;
@@ -187,24 +174,13 @@ export function CardBack(props: {
   const { card, actions } = props;
   const notes = useNotes(card.id, props.noteActions);
   const target = useNoteTarget(notes);
-  const { labels, members } = useUi();
-  const chosen = labels.find((known) => known.id === card.labelId);
-  const assignee = members.find((member) => member.id === card.assigneeId);
   const modal = useModal();
-  const [picker, setPicker] = useState<{ kind: PickerKind; anchor: HTMLElement } | null>(null);
   const [menu, setMenu] = useState<HTMLElement | null>(null);
   const [checklistShown, setChecklistShown] = useState(false);
   const body = useRef<HTMLDivElement>(null);
   const titleRow = useRef<HTMLDivElement>(null);
   const titleHidden = useScrolledPast(body, titleRow);
-
-  const toggle = (kind: PickerKind) => (event: { currentTarget: HTMLElement }) => {
-    const anchor = event.currentTarget;
-    setPicker((open) => (open?.kind === kind ? null : { kind, anchor }));
-  };
-
-  const edit = (fields: Fields) => actions.edit(fields);
-  const move = (to: Container) => actions.move(to);
+  const { edit } = actions;
 
   return (
     <dialog
@@ -215,18 +191,7 @@ export function CardBack(props: {
       onClose={props.onClose}
       {...target.props}
     >
-      {target.dragged > 0 && (
-        <div className={styles.drop} aria-hidden>
-          <div className={styles.dropBox}>
-            <span className={styles.dropTitle}>Suelta para añadir a Notas</span>
-            <span className={styles.dropHint}>
-              {target.dragged === 1
-                ? "Se guarda como nota nueva"
-                : `${target.dragged} archivos · cada uno se guarda como nota nueva`}
-            </span>
-          </div>
-        </div>
-      )}
+      <NoteDrop dragged={target.dragged} />
       <header className={styles.bar} data-scrolled={titleHidden}>
         <span className={styles.context}>
           {titleHidden && <span className={styles.barTitle}>{card.title}</span>}
@@ -261,96 +226,13 @@ export function CardBack(props: {
           <Title card={card} onSave={(title) => edit({ title })} />
         </div>
 
-        <div className={styles.grid}>
-          <span className={styles.prop} id="prop-lista">
-            Lista
-          </span>
-          <button
-            type="button"
-            className={styles.value}
-            aria-labelledby="prop-lista"
-            aria-haspopup="dialog"
-            onClick={toggle("lista")}
-          >
-            <span className={styles.valueText}>{LIST_TITLES[card.list]}</span>
-            <ChevronDown size={14} className={styles.chevron} aria-hidden />
-          </button>
-          <span className={styles.prop} id="prop-etiqueta">
-            Etiqueta
-          </span>
-          <button
-            type="button"
-            className={styles.value}
-            aria-labelledby="prop-etiqueta"
-            aria-haspopup="dialog"
-            data-empty={!chosen}
-            onClick={toggle("etiqueta")}
-          >
-            {chosen ? (
-              <span className={styles.valueText}>
-                <LabelDot color={chosen.color} />
-                {chosen.name}
-              </span>
-            ) : (
-              <span className={styles.valueText}>Añadir etiqueta</span>
-            )}
-          </button>
-          {members.length > 1 && (
-            <>
-              <span className={styles.prop} id="prop-responsable">
-                Responsable
-              </span>
-              <button
-                type="button"
-                className={styles.value}
-                aria-labelledby="prop-responsable"
-                aria-haspopup="dialog"
-                data-empty={!assignee}
-                onClick={toggle("responsable")}
-              >
-                {assignee && (
-                  <span className={styles.avatar} data-assignee aria-hidden>
-                    {assignee.name[0]}
-                  </span>
-                )}
-                <span className={styles.valueText}>{assignee?.name ?? "Asignar"}</span>
-              </button>
-            </>
-          )}
-          <span className={styles.prop} id="prop-solicitante">
-            Solicitante
-          </span>
-          <button
-            type="button"
-            className={styles.value}
-            aria-labelledby="prop-solicitante"
-            aria-haspopup="dialog"
-            data-empty={!card.requester}
-            onClick={toggle("solicitante")}
-          >
-            {card.requester && (
-              <span className={styles.avatar} aria-hidden>
-                {card.requester[0]}
-              </span>
-            )}
-            <span className={styles.valueText}>{card.requester ?? "Añadir"}</span>
-          </button>
-          <span className={styles.prop} id="prop-fecha">
-            Fecha
-          </span>
-          <button
-            type="button"
-            className={styles.value}
-            aria-labelledby="prop-fecha"
-            aria-haspopup="dialog"
-            data-empty={!card.doneDate}
-            onClick={toggle("fecha")}
-          >
-            <span className={styles.valueText}>
-              {card.doneDate ? dayHeading(card.doneDate, props.today) : "Añadir fecha"}
-            </span>
-          </button>
-        </div>
+        <CardProperties
+          card={card}
+          today={props.today}
+          requesters={props.requesters}
+          edit={edit}
+          move={actions.move}
+        />
 
         <Description value={card.description} onSave={(description) => edit({ description })} />
         {card.checklist.length > 0 || checklistShown ? (
@@ -377,61 +259,6 @@ export function CardBack(props: {
           }}
           onClose={() => setMenu(null)}
         />
-      )}
-
-      {picker && (
-        <Sheet anchor={picker.anchor} label={PICKER_LABEL[picker.kind]} onClose={() => setPicker(null)}>
-          <div className={styles.pickerSheet}>
-            {picker.kind === "lista" && (
-              <ListPicker
-                value={card.list}
-                onPick={(list) => {
-                  move({ list, doneDate: list === "hecho" ? props.today : null });
-                  setPicker(null);
-                }}
-              />
-            )}
-            {picker.kind === "etiqueta" && (
-              <LabelPicker
-                value={card.labelId}
-                onPick={(labelId) => {
-                  if (labelId !== card.labelId) edit({ labelId });
-                  setPicker(null);
-                }}
-              />
-            )}
-            {picker.kind === "responsable" && (
-              <AssigneePicker
-                value={card.assigneeId}
-                members={members}
-                onPick={(assigneeId) => {
-                  if (assigneeId !== card.assigneeId) edit({ assigneeId });
-                  setPicker(null);
-                }}
-              />
-            )}
-            {picker.kind === "solicitante" && (
-              <RequesterPicker
-                value={card.requester}
-                suggestions={props.requesters}
-                onSave={(requester) => {
-                  if (requester !== card.requester) edit({ requester });
-                  setPicker(null);
-                }}
-              />
-            )}
-            {picker.kind === "fecha" && (
-              <DatePicker
-                value={card.doneDate}
-                today={props.today}
-                onSave={(date) => {
-                  if (date !== card.doneDate) move({ list: "hecho", doneDate: date });
-                  setPicker(null);
-                }}
-              />
-            )}
-          </div>
-        </Sheet>
       )}
     </dialog>
   );
