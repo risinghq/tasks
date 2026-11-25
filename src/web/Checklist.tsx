@@ -1,54 +1,8 @@
-import { Eye, EyeOff, ListChecks, Plus, Trash2, X } from "lucide-react";
-import { useRef, useState } from "react";
+import { Check, Plus, X } from "lucide-react";
+import { useState } from "react";
 import { CHECKLIST_MAX, CHECKLIST_TEXT_MAX, type ChecklistItem } from "../shared/model";
 import styles from "./Checklist.module.css";
 import { useEscape } from "./useEscape";
-
-/** One item's text. A click turns it into a field. Enter or blur saves, Escape restores. */
-function ItemText({ text, done, onSave }: { text: string; done: boolean; onSave: (text: string) => void }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(text);
-  const restored = useRef(false);
-  useEscape(() => {
-    restored.current = true;
-    setEditing(false);
-  }, editing);
-
-  if (!editing) {
-    return (
-      <button
-        type="button"
-        className={styles.text}
-        data-done={done}
-        onClick={() => {
-          setDraft(text);
-          setEditing(true);
-        }}
-      >
-        {text}
-      </button>
-    );
-  }
-
-  return (
-    <input
-      className={styles.edit}
-      autoFocus
-      maxLength={CHECKLIST_TEXT_MAX}
-      value={draft}
-      aria-label="Texto del elemento"
-      onChange={(event) => setDraft(event.target.value)}
-      onFocus={() => (restored.current = false)}
-      onKeyDown={(event) => {
-        if (event.key === "Enter") event.currentTarget.blur();
-      }}
-      onBlur={() => {
-        if (!restored.current && draft.trim() && draft.trim() !== text) onSave(draft.trim());
-        setEditing(false);
-      }}
-    />
-  );
-}
 
 /** The "Añadir un elemento" composer. It stays open after Enter, ready for the next item. */
 function ItemComposer({ onAdd, startOpen }: { onAdd: (text: string) => void; startOpen: boolean }) {
@@ -123,57 +77,51 @@ export function Checklist(props: {
 
   return (
     <section className={styles.section}>
-      <header className={styles.header}>
-        <h3 className={styles.heading}>
-          <ListChecks size={16} aria-hidden /> Checklist
-        </h3>
+      <div className={styles.header}>
+        <span className={styles.label}>Checklist</span>
+        <span className={styles.count}>
+          {done} de {items.length}
+        </span>
+        <span className={styles.spacer} />
         {done > 0 && (
           <button type="button" className={styles.toggle} onClick={() => setHideDone(!hideDone)}>
-            {hideDone ? <Eye size={16} aria-hidden /> : <EyeOff size={16} aria-hidden />}
             {hideDone ? "Mostrar marcados" : "Ocultar marcados"}
           </button>
         )}
-      </header>
-
-      <div className={styles.progress}>
-        <span className={styles.percent}>{percent}%</span>
-        <div
-          className={styles.bar}
-          role="progressbar"
-          aria-label="Progreso del checklist"
-          aria-valuenow={percent}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          data-complete={items.length > 0 && percent === 100}
-        >
-          <div className={styles.fill} style={{ transform: `scaleX(${percent / 100})` }} />
-        </div>
       </div>
 
-      <ul className={styles.items}>
+      <div
+        className={styles.bar}
+        role="progressbar"
+        aria-label="Progreso del checklist"
+        aria-valuenow={percent}
+        aria-valuemin={0}
+        aria-valuemax={100}
+      >
+        <div className={styles.fill} style={{ transform: `scaleX(${percent / 100})` }} />
+      </div>
+
+      <div className={styles.items}>
         {items.map((item, index) =>
           hideDone && item.done ? null : (
-            <li key={index} className={styles.item}>
-              <input
-                type="checkbox"
-                className={styles.check}
-                checked={item.done}
-                aria-label={`Marcar: ${item.text}`}
-                onChange={(event) => change(index, { done: event.target.checked })}
-              />
-              <ItemText text={item.text} done={item.done} onSave={(text) => change(index, { text })} />
-              <button
-                type="button"
-                className={styles.remove}
-                aria-label={`Eliminar elemento: ${item.text}`}
-                onClick={() => props.onSave(items.filter((_, i) => i !== index))}
-              >
-                <Trash2 size={16} aria-hidden />
-              </button>
-            </li>
+            <button
+              key={index}
+              type="button"
+              role="checkbox"
+              aria-checked={item.done}
+              className={styles.item}
+              onClick={() => change(index, { done: !item.done })}
+            >
+              <span className={styles.box} data-done={item.done} aria-hidden>
+                <Check size={12} strokeWidth={2} />
+              </span>
+              <span className={styles.itemText} data-done={item.done}>
+                {item.text}
+              </span>
+            </button>
           ),
         )}
-      </ul>
+      </div>
 
       {items.length < CHECKLIST_MAX && (
         <ItemComposer

@@ -76,12 +76,34 @@ test.describe("narrow screens", () => {
 
     await tasks.card("Luego").click();
     const card = page.getByRole("dialog", { name: "Tarjeta" });
-    await card.getByRole("button", { name: "Mover", exact: true }).click();
-    await page.getByLabel("Lista", { exact: true }).selectOption("en_curso");
-    await page.getByRole("button", { name: "Mover", exact: true }).last().click();
+    await card.getByRole("button", { name: "Lista", exact: true }).click();
+    await page.getByRole("option", { name: "En curso" }).click();
     await page.keyboard.press("Escape");
     await tabs.nth(2).click();
     await expect(tasks.list("En curso").locator("[data-card-id]")).toHaveText(["Ahora", "Luego"]);
+  });
+
+  test("the card back shows no horizontal scrollbar at narrow widths", async ({ page, tasks }) => {
+    await tasks.seed([
+      {
+        title: `Título ${"a".repeat(60)}`,
+        list: "en_curso",
+        label: { name: `Etiqueta ${"b".repeat(60)}`, color: "blue" },
+        checklist: [{ text: `Elemento ${"c".repeat(60)}`, done: false }],
+        description: `Nota ${"d".repeat(60)}`,
+      },
+    ]);
+    await tasks.open();
+
+    const overflow = () =>
+      page.evaluate<number>("document.documentElement.scrollWidth - document.documentElement.clientWidth");
+    for (const width of [390, 320]) {
+      await page.setViewportSize({ width, height: 844 });
+      await tasks.card(`Título ${"a".repeat(60)}`).click();
+      await expect(page.getByRole("dialog", { name: "Tarjeta" })).toBeVisible();
+      await expect.poll(overflow).toBeLessThanOrEqual(0);
+      await page.keyboard.press("Escape");
+    }
   });
 
   test("the header fits the screen", async ({ page, tasks }) => {

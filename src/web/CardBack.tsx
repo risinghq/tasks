@@ -1,13 +1,15 @@
-import { ArrowRight, Clock, ListChecks, Tag, Trash2, User, X } from "lucide-react";
+import { Check, ChevronDown, Ellipsis, Plus, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { dayHeading } from "../shared/dates";
-import { labelStyle, LIST_TITLES, TITLE_MAX, type Card } from "../shared/model";
+import { LIST_TITLES, TITLE_MAX, type Card } from "../shared/model";
 import type { Fields } from "./boardState";
 import { Checklist } from "./Checklist";
-import { CardPopover, type CardActions, type PopoverKind } from "./CardPopover";
-import { Completion } from "./CardView";
+import { LabelDot } from "./CardView";
 import { useModal } from "./Dialog";
 import { Description } from "./Description";
+import { LabelPicker } from "./LabelPicker";
+import { DatePicker, ListPicker, RequesterPicker } from "./Pickers";
+import { Sheet } from "./Sheet";
 import styles from "./CardBack.module.css";
 import type { Container } from "./groups";
 import { useUi } from "./ui";
@@ -21,11 +23,15 @@ function Title({ card, onSave }: { card: Card; onSave: (title: string) => void }
   const field = useAutosize();
   const restored = useRef(false);
 
-  useEscape(() => {
-    restored.current = true;
-    setText(card.title);
-    field.current?.blur();
-  }, focused);
+  // A focused but unedited title lets Escape close the card.
+  useEscape(
+    () => {
+      restored.current = true;
+      setText(card.title);
+      field.current?.blur();
+    },
+    focused && text !== card.title,
+  );
 
   // The title can change from outside, for example from quick edit.
   const [seen, setSeen] = useState(card.title);
@@ -64,16 +70,93 @@ function Title({ card, onSave }: { card: Card; onSave: (title: string) => void }
   );
 }
 
-const BUTTONS: { kind: PopoverKind; label: string; icon: typeof Tag }[] = [
-  { kind: "label", label: "Etiqueta", icon: Tag },
-  { kind: "requester", label: "Solicitante", icon: User },
-  { kind: "date", label: "Fecha", icon: Clock },
-  { kind: "move", label: "Mover", icon: ArrowRight },
-];
+/** The done circle of the back: a 26px ring inside a 40px target. */
+function DoneCircle({ done, onToggle }: { done: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      className={styles.done}
+      aria-label={done ? "Mover a En curso" : "Marcar como hecha"}
+      onClick={onToggle}
+    >
+      <span className={styles.doneCircle} data-done={done}>
+        <Check size={14} strokeWidth={2} aria-hidden />
+      </span>
+    </button>
+  );
+}
+
+/** The ··· menu: copy the card link, and delete behind a confirmation. */
+function MoreMenu(props: { anchor: HTMLElement; cardId: string; onDelete: () => void; onClose: () => void }) {
+  const [confirming, setConfirming] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(`${location.origin}/c/${props.cardId}`);
+    } catch {
+      // The clipboard can refuse; the menu just closes.
+    }
+    setCopied(true);
+    setTimeout(props.onClose, 700);
+  };
+
+  return (
+    <Sheet anchor={props.anchor} label="Más acciones" align="right" onClose={props.onClose}>
+      {confirming ? (
+        <div className={styles.confirm} role="alertdialog" aria-label="Eliminar tarjeta">
+          <p>¿Eliminar esta tarjeta?</p>
+          <div className={styles.confirmActions}>
+            <button
+              type="button"
+              className={styles.destroy}
+              autoFocus
+              onClick={() => {
+                props.onDelete();
+                props.onClose();
+              }}
+            >
+              Sí, eliminar
+            </button>
+            <button type="button" className={styles.menuCancel} onClick={() => setConfirming(false)}>
+              Cancelar
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className={styles.menu} role="menu" aria-label="Más acciones">
+          <button type="button" role="menuitem" className={styles.menuItem} data-autofocus onClick={copy}>
+            {copied ? "Copiado" : "Copiar enlace a la tarjeta"}
+          </button>
+          <div className={styles.menuLine} role="separator" />
+          <button
+            type="button"
+            role="menuitem"
+            className={styles.menuItem}
+            data-danger
+            onClick={() => setConfirming(true)}
+          >
+            Eliminar tarjeta…
+          </button>
+        </div>
+      )}
+    </Sheet>
+  );
+}
+
+type PickerKind = "lista" | "etiqueta" | "solicitante" | "fecha";
+
+const PICKER_LABEL: Record<PickerKind, string> = {
+  lista: "Lista",
+  etiqueta: "Etiqueta",
+  solicitante: "Solicitante",
+  fecha: "Fecha de término",
+};
 
 export function CardBack(props: {
   card: Card;
   today: string;
+  workspace: string;
   requesters: string[];
   actions: CardActions & { remove: () => void; toggleDone: () => void };
   onClose: () => void;
@@ -82,12 +165,13 @@ export function CardBack(props: {
   const { labels } = useUi();
   const chosen = labels.find((known) => known.id === card.labelId);
   const modal = useModal();
-  const [popover, setPopover] = useState<{ kind: PopoverKind; anchor: HTMLElement } | null>(null);
+  const [picker, setPicker] = useState<{ kind: PickerKind; anchor: HTMLElement } | null>(null);
+  const [menu, setMenu] = useState<HTMLElement | null>(null);
   const [checklistShown, setChecklistShown] = useState(false);
 
-  const toggle = (kind: PopoverKind) => (event: { currentTarget: HTMLElement }) => {
+  const toggle = (kind: PickerKind) => (event: { currentTarget: HTMLElement }) => {
     const anchor = event.currentTarget;
-    setPopover((open) => (open?.kind === kind ? null : { kind, anchor }));
+    setPicker((open) => (open?.kind === kind ? null : { kind, anchor }));
   };
 
   const edit = (fields: Fields) => actions.edit(fields);
@@ -102,95 +186,175 @@ export function CardBack(props: {
       onClose={props.onClose}
     >
       <header className={styles.bar}>
-        <span className={styles.list}>{LIST_TITLES[card.list]}</span>
-        <div className={styles.barActions}>
-          <button
-            type="button"
-            className={styles.icon}
-            aria-label="Eliminar"
-            onClick={() => {
-              actions.remove();
-              modal.close();
-            }}
-          >
-            <Trash2 size={16} aria-hidden />
-          </button>
-          <button type="button" className={styles.icon} aria-label="Cerrar" onClick={modal.close}>
-            <X size={16} aria-hidden />
-          </button>
-        </div>
+        <span className={styles.context}>
+          {props.workspace} · {LIST_TITLES[card.list]}
+        </span>
+        <button
+          type="button"
+          className={styles.icon}
+          aria-label="Más acciones"
+          aria-haspopup="menu"
+          aria-expanded={menu !== null}
+          data-open={menu !== null}
+          onClick={(event) => setMenu((open) => (open ? null : event.currentTarget))}
+        >
+          <Ellipsis size={16} aria-hidden />
+        </button>
+        <button type="button" className={styles.close} aria-label="Cerrar" onClick={modal.close}>
+          <X size={16} strokeWidth={1.6} aria-hidden />
+        </button>
       </header>
 
       <div className={styles.body}>
         <div className={styles.titleRow}>
-          <Completion done={card.list === "hecho"} size="back" onToggle={actions.toggleDone} />
+          <DoneCircle done={card.list === "hecho"} onToggle={actions.toggleDone} />
           <Title card={card} onSave={(title) => edit({ title })} />
         </div>
 
-        <div className={styles.buttons}>
-          {BUTTONS.map(({ kind, label, icon: Icon }) => (
-            <button key={kind} type="button" className={styles.outlined} onClick={toggle(kind)}>
-              <Icon size={16} aria-hidden /> {label}
-            </button>
-          ))}
-          <button type="button" className={styles.outlined} onClick={() => setChecklistShown(true)}>
-            <ListChecks size={16} aria-hidden /> Checklist
+        <div className={styles.grid}>
+          <span className={styles.prop} id="prop-lista">
+            Lista
+          </span>
+          <button
+            type="button"
+            className={styles.value}
+            aria-labelledby="prop-lista"
+            aria-haspopup="dialog"
+            onClick={toggle("lista")}
+          >
+            <span className={styles.valueText}>{LIST_TITLES[card.list]}</span>
+            <ChevronDown size={14} className={styles.chevron} aria-hidden />
+          </button>
+          <span className={styles.prop} id="prop-etiqueta">
+            Etiqueta
+          </span>
+          <button
+            type="button"
+            className={styles.value}
+            aria-labelledby="prop-etiqueta"
+            aria-haspopup="dialog"
+            data-empty={!chosen}
+            onClick={toggle("etiqueta")}
+          >
+            {chosen ? (
+              <span className={styles.valueText}>
+                <LabelDot color={chosen.color} />
+                {chosen.name}
+              </span>
+            ) : (
+              <span className={styles.valueText}>Añadir etiqueta</span>
+            )}
+          </button>
+          <span className={styles.prop} id="prop-solicitante">
+            Solicitante
+          </span>
+          <button
+            type="button"
+            className={styles.value}
+            aria-labelledby="prop-solicitante"
+            aria-haspopup="dialog"
+            data-empty={!card.requester}
+            onClick={toggle("solicitante")}
+          >
+            {card.requester && (
+              <span className={styles.avatar} aria-hidden>
+                {card.requester[0]}
+              </span>
+            )}
+            <span className={styles.valueText}>{card.requester ?? "Añadir"}</span>
+          </button>
+          <span className={styles.prop} id="prop-fecha">
+            Fecha
+          </span>
+          <button
+            type="button"
+            className={styles.value}
+            aria-labelledby="prop-fecha"
+            aria-haspopup="dialog"
+            data-empty={!card.doneDate}
+            onClick={toggle("fecha")}
+          >
+            <span className={styles.valueText}>
+              {card.doneDate ? dayHeading(card.doneDate, props.today) : "Añadir fecha"}
+            </span>
           </button>
         </div>
 
-        <div className={styles.fields}>
-          {chosen && (
-            <div>
-              <span className={styles.label}>Etiqueta</span>
-              <button
-                type="button"
-                className={styles.labelChip}
-                style={labelStyle(chosen.color)}
-                onClick={toggle("label")}
-              >
-                {chosen.name}
-              </button>
-            </div>
-          )}
-          {card.requester && (
-            <div>
-              <span className={styles.label}>Solicitante</span>
-              <button type="button" className={styles.chip} onClick={toggle("requester")}>
-                {card.requester}
-              </button>
-            </div>
-          )}
-          {card.doneDate && (
-            <div>
-              <span className={styles.label}>Fecha de término</span>
-              <button type="button" className={styles.chip} onClick={toggle("date")}>
-                {dayHeading(card.doneDate, props.today)}
-              </button>
-            </div>
-          )}
-        </div>
-
         <Description value={card.description} onSave={(description) => edit({ description })} />
-        {(card.checklist.length > 0 || checklistShown) && (
+        {card.checklist.length > 0 || checklistShown ? (
           <Checklist
             startOpen={card.checklist.length === 0}
             items={card.checklist}
             onSave={(checklist) => edit({ checklist })}
           />
+        ) : (
+          <button type="button" className={styles.addChecklist} onClick={() => setChecklistShown(true)}>
+            <Plus size={16} aria-hidden /> Añadir checklist
+          </button>
         )}
       </div>
 
-      {popover && (
-        <CardPopover
-          kind={popover.kind}
-          anchor={popover.anchor}
-          card={card}
-          today={props.today}
-          requesters={props.requesters}
-          actions={{ edit, move }}
-          onClose={() => setPopover(null)}
+      {menu && (
+        <MoreMenu
+          anchor={menu}
+          cardId={card.id}
+          onDelete={() => {
+            actions.remove();
+            modal.close();
+          }}
+          onClose={() => setMenu(null)}
         />
+      )}
+
+      {picker && (
+        <Sheet anchor={picker.anchor} label={PICKER_LABEL[picker.kind]} onClose={() => setPicker(null)}>
+          <div className={styles.pickerSheet}>
+            {picker.kind === "lista" && (
+              <ListPicker
+                value={card.list}
+                onPick={(list) => {
+                  move({ list, doneDate: list === "hecho" ? props.today : null });
+                  setPicker(null);
+                }}
+              />
+            )}
+            {picker.kind === "etiqueta" && (
+              <LabelPicker
+                value={card.labelId}
+                onPick={(labelId) => {
+                  if (labelId !== card.labelId) edit({ labelId });
+                  setPicker(null);
+                }}
+              />
+            )}
+            {picker.kind === "solicitante" && (
+              <RequesterPicker
+                value={card.requester}
+                suggestions={props.requesters}
+                onSave={(requester) => {
+                  if (requester !== card.requester) edit({ requester });
+                  setPicker(null);
+                }}
+              />
+            )}
+            {picker.kind === "fecha" && (
+              <DatePicker
+                value={card.doneDate}
+                today={props.today}
+                onSave={(date) => {
+                  if (date !== card.doneDate) move({ list: "hecho", doneDate: date });
+                  setPicker(null);
+                }}
+              />
+            )}
+          </div>
+        </Sheet>
       )}
     </dialog>
   );
 }
+
+export type CardActions = {
+  edit: (fields: Fields) => void;
+  move: (to: Container) => void;
+};

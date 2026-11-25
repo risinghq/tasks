@@ -252,6 +252,7 @@ export function Board() {
           key={openCard.id}
           card={openCard}
           today={board.today}
+          workspace={workspaceName}
           requesters={board.requesters}
           actions={{
             edit: (fields) => board.edit(openCard.id, fields),

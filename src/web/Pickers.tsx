@@ -3,6 +3,19 @@ import { MIN_DATE } from "../shared/dates";
 import { LIST_TITLES, LISTS, type Card, type ListId } from "../shared/model";
 import type { Container } from "./groups";
 import styles from "./Pickers.module.css";
+import { Initial, OptionList } from "./Select";
+
+/** The four lists as a listbox, for the card back's Lista row. */
+export function ListPicker(props: { value: ListId; onPick: (list: ListId) => void }) {
+  return (
+    <OptionList
+      label="Lista"
+      value={props.value}
+      options={LISTS.map((id) => ({ id, name: LIST_TITLES[id] }))}
+      onPick={(id) => props.onPick(id as ListId)}
+    />
+  );
+}
 
 export function RequesterPicker(props: {
   value: string | null;
@@ -35,15 +48,12 @@ export function RequesterPicker(props: {
         onChange={(event) => setText(event.target.value)}
       />
       {shown.length > 0 && (
-        <ul className={styles.options} aria-label="Sugerencias">
-          {shown.slice(0, 6).map((name) => (
-            <li key={name}>
-              <button type="button" className={styles.option} onClick={() => props.onSave(name)}>
-                {name}
-              </button>
-            </li>
-          ))}
-        </ul>
+        <OptionList
+          label="Sugerencias"
+          value={props.value}
+          options={shown.slice(0, 6).map((name) => ({ id: name, name, mark: <Initial name={name} /> }))}
+          onPick={props.onSave}
+        />
       )}
       <div className={styles.actions}>
         <button type="submit" className={styles.primary}>
