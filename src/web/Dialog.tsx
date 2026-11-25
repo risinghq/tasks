@@ -35,20 +35,30 @@ export function useModal() {
   };
 }
 
-export function Dialog(props: { title: string; onClose: () => void; wide?: boolean; children: ReactNode }) {
+export function Dialog(props: {
+  title: string;
+  onClose: () => void;
+  wide?: boolean;
+  /** Rises from the bottom edge on a phone instead of floating centred. */
+  sheet?: boolean;
+  className?: string;
+  children: ReactNode;
+}) {
   const modal = useModal();
   const titleId = useId();
 
   return (
     <dialog
       {...modal.props}
-      className={styles.dialog}
+      className={props.className ? `${styles.dialog} ${props.className}` : styles.dialog}
       data-elevation="modal"
       data-wide={props.wide}
+      data-sheet={props.sheet}
       aria-labelledby={titleId}
       onClose={props.onClose}
     >
       <div className={styles.content}>
+        {props.sheet && <div className={styles.grabber} aria-hidden />}
         <header className={styles.header}>
           <h2 id={titleId} className={styles.title}>
             {props.title}

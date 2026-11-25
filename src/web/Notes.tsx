@@ -1,5 +1,6 @@
-import { FileText, LoaderCircle, Paperclip, X } from "lucide-react";
+import { Ellipsis, LoaderCircle, X } from "lucide-react";
 import { Fragment, useEffect, useRef, useState, type DragEvent, type ClipboardEvent } from "react";
+import { dayHeading, limaDate } from "../shared/dates";
 import { NOTE_TEXT_MAX, type Note } from "../shared/model";
 import { carriesFiles, isTyping, noteContent } from "./noteInput";
 import styles from "./Notes.module.css";
@@ -11,6 +12,9 @@ import type { Notes as NotesState } from "./useNotes";
 const PICTURES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "image/avif"]);
 
 const LINK = /(https?:\/\/[^\s<>"]+[^\s<>".,;:!?)\]'])/g;
+
+/** A touch screen has no hover and no drop, so the copy and the note actions change. */
+const touch = () => matchMedia("(pointer: coarse)").matches;
 
 /** The text with its web addresses as links. */
 function Linked({ text }: { text: string }) {
@@ -30,45 +34,51 @@ function Linked({ text }: { text: string }) {
   );
 }
 
-const dayFormat = new Intl.DateTimeFormat("es", { day: "numeric", month: "short" });
 const clockFormat = new Intl.DateTimeFormat("es", { hour: "2-digit", minute: "2-digit" });
 const fullFormat = new Intl.DateTimeFormat("es", { dateStyle: "full", timeStyle: "short" });
-
-/** "14:32" today, "3 nov, 14:32" before. */
-function when(createdAt: number): string {
-  const date = new Date(createdAt * 1000);
-  const today = new Date().toDateString() === date.toDateString();
-  return today ? clockFormat.format(date) : `${dayFormat.format(date)}, ${clockFormat.format(date)}`;
-}
 
 function size(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  return `${(bytes / 1024 / 1024).toFixed(1).replace(".", ",")} MB`;
+}
+
+/** "PDF" for "contrato.pdf"; a name without a short extension gets a generic badge. */
+function extension(name: string): string {
+  const match = /\.([a-z0-9]{1,4})$/i.exec(name);
+  return match ? match[1]!.toUpperCase() : "ARCH";
 }
 
 function Attachment({ file }: { file: NonNullable<Note["file"]> }) {
   if (PICTURES.has(file.type)) {
     return (
-      <a className={styles.picture} href={file.url} target="_blank" rel="noopener" aria-label={file.name}>
-        <img src={file.url} alt={file.name} loading="lazy" />
-      </a>
+      <div className={styles.picture}>
+        <a className={styles.crop} href={file.url} target="_blank" rel="noopener" aria-label={file.name}>
+          <img src={file.url} alt={file.name} loading="lazy" />
+        </a>
+        <span className={styles.caption}>
+          {file.name} · {size(file.size)}
+        </span>
+      </div>
     );
   }
   return (
     <a className={styles.file} href={file.url} target="_blank" rel="noopener">
-      <FileText size={16} aria-hidden />
-      <span className={styles.fileName}>{file.name}</span>
-      <span className={styles.fileSize}>{size(file.size)}</span>
+      <span className={styles.ext} aria-hidden>
+        {extension(file.name)}
+      </span>
+      <span className={styles.fileText}>
+        <span className={styles.fileName}>{file.name}</span>
+        <span className={styles.fileSize}>{size(file.size)}</span>
+      </span>
     </a>
   );
 }
 
-/** A note's text in place. Blur or Ctrl+Enter saves, Escape restores. */
+/** A note's text in place. Guardar or Ctrl+Enter saves; Cancelar or Escape restores. */
 function EditText(props: { note: Note; onSave: (text: string) => Promise<boolean>; onDone: () => void }) {
   const [draft, setDraft] = useState(props.note.text);
   const field = useAutosize();
-  const restored = useRef(false);
 
   useEffect(() => {
     const element = field.current;
@@ -76,42 +86,48 @@ function EditText(props: { note: Note; onSave: (text: string) => Promise<boolean
     element?.setSelectionRange(element.value.length, element.value.length);
   }, [field]);
 
-  useEscape(() => {
-    restored.current = true;
-    props.onDone();
-  });
+  useEscape(props.onDone);
 
   const save = async () => {
-    if (restored.current) return;
     const text = draft.trim();
     if (text === props.note.text || (!text && !props.note.file)) return props.onDone();
     if (await props.onSave(text)) props.onDone();
   };
 
   return (
-    <textarea
-      ref={field}
-      className={styles.edit}
-      rows={1}
-      maxLength={NOTE_TEXT_MAX}
-      value={draft}
-      aria-label="Texto de la nota"
-      placeholder={props.note.file ? "Añade un texto al archivo…" : undefined}
-      onChange={(event) => setDraft(event.target.value)}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
-          event.preventDefault();
-          event.currentTarget.blur();
-        }
-      }}
-      onBlur={() => void save()}
-    />
+    <div className={styles.editing}>
+      <textarea
+        ref={field}
+        className={styles.edit}
+        rows={1}
+        maxLength={NOTE_TEXT_MAX}
+        value={draft}
+        aria-label="Texto de la nota"
+        placeholder={props.note.file ? "Añade un texto al archivo…" : undefined}
+        onChange={(event) => setDraft(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+            event.preventDefault();
+            void save();
+          }
+        }}
+      />
+      <div className={styles.editActions}>
+        <button type="button" className={styles.save} onClick={() => void save()}>
+          Guardar
+        </button>
+        <button type="button" className={styles.cancel} onClick={props.onDone}>
+          Cancelar
+        </button>
+      </div>
+    </div>
   );
 }
 
 function Entry({ note, notes }: { note: Note; notes: NotesState }) {
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [actionsShown, setActionsShown] = useState(false);
 
   useEffect(() => {
     if (!confirming) return;
@@ -121,49 +137,86 @@ function Entry({ note, notes }: { note: Note; notes: NotesState }) {
 
   const date = new Date(note.createdAt * 1000);
   return (
-    <li className={styles.entry} data-note-id={note.id}>
+    <li className={styles.entry} data-note-id={note.id} data-editing={editing}>
       <div className={styles.entryHead}>
         <span className={styles.avatar} aria-hidden>
           {note.author?.name[0] ?? "?"}
         </span>
         <span className={styles.author}>{note.author?.name ?? "Alguien"}</span>
         <time className={styles.time} dateTime={date.toISOString()} title={fullFormat.format(date)}>
-          {when(note.createdAt)}
+          {clockFormat.format(date)}
         </time>
         <span className={styles.spacer} />
         {!editing && (
-          <button type="button" className={styles.action} onClick={() => setEditing(true)}>
-            {note.text || !note.file ? "Editar" : "Añadir texto"}
-          </button>
+          <>
+            <span className={styles.actions} data-shown={actionsShown || confirming}>
+              <button
+                type="button"
+                className={styles.action}
+                onClick={() => {
+                  setActionsShown(false);
+                  setEditing(true);
+                }}
+              >
+                {note.text || !note.file ? "Editar" : "Añadir texto"}
+              </button>
+              <button
+                type="button"
+                className={styles.action}
+                data-danger={confirming}
+                onClick={() => (confirming ? void notes.remove(note) : setConfirming(true))}
+              >
+                {confirming ? "¿Eliminar?" : "Eliminar"}
+              </button>
+            </span>
+            <button
+              type="button"
+              className={styles.more}
+              aria-label="Acciones de la nota"
+              aria-expanded={actionsShown}
+              onClick={() => setActionsShown((shown) => !shown)}
+            >
+              <Ellipsis size={16} aria-hidden />
+            </button>
+          </>
         )}
-        <button
-          type="button"
-          className={styles.action}
-          data-danger={confirming}
-          onClick={() => (confirming ? void notes.remove(note) : setConfirming(true))}
-        >
-          {confirming ? "¿Eliminar?" : "Eliminar"}
-        </button>
       </div>
-      {editing ? (
-        <EditText note={note} onSave={(text) => notes.update(note, text)} onDone={() => setEditing(false)} />
-      ) : (
-        note.text && (
-          <p className={styles.text}>
-            <Linked text={note.text} />
-          </p>
-        )
-      )}
-      {note.file && <Attachment file={note.file} />}
+      <div className={styles.entryBody}>
+        {editing ? (
+          <EditText
+            note={note}
+            onSave={(text) => notes.update(note, text)}
+            onDone={() => setEditing(false)}
+          />
+        ) : (
+          note.text && (
+            <p className={styles.text}>
+              <Linked text={note.text} />
+            </p>
+          )
+        )}
+        {note.file && <Attachment file={note.file} />}
+      </div>
     </li>
   );
 }
 
+/** The notes, newest first, under a heading for each day. */
+function byDay(notes: Note[], today: string): { day: string; notes: Note[] }[] {
+  const days: { day: string; notes: Note[] }[] = [];
+  for (const note of notes.toReversed()) {
+    const day = dayHeading(limaDate(new Date(note.createdAt * 1000)), today);
+    if (days.at(-1)?.day === day) days.at(-1)!.notes.push(note);
+    else days.push({ day, notes: [note] });
+  }
+  return days;
+}
+
 /**
  * The card's log: a box that takes text, pasted pictures and files, then the
- * notes, newest first. Enter saves the box; Shift+Enter starts a new line.
+ * notes by day, newest first. Enter saves the box; Shift+Enter starts a new line.
  */
-export function Notes({ notes, focus }: { notes: NotesState; focus: boolean }) {
+export function Notes({ notes, focus, today }: { notes: NotesState; focus: boolean; today: string }) {
   const [draft, setDraft] = useState("");
   const [focused, setFocused] = useState(false);
   const field = useAutosize();
@@ -179,6 +232,7 @@ export function Notes({ notes, focus }: { notes: NotesState; focus: boolean }) {
   };
 
   const count = notes.notes?.length ?? 0;
+  const onTouch = touch();
   return (
     <section className={styles.section} aria-labelledby="notes-title">
       <div className={styles.header}>
@@ -186,9 +240,40 @@ export function Notes({ notes, focus }: { notes: NotesState; focus: boolean }) {
           Notas
         </span>
         {count > 0 && <span className={styles.count}>{count}</span>}
-        <span className={styles.spacer} />
+      </div>
+
+      <div className={styles.composer}>
+        <textarea
+          ref={field}
+          className={styles.capture}
+          rows={1}
+          maxLength={NOTE_TEXT_MAX}
+          value={draft}
+          aria-label="Nueva nota"
+          // The card back's dialog focuses this when it opens.
+          data-autofocus={focus || undefined}
+          placeholder={
+            onTouch ? "Anota algo o pega una imagen…" : "Anota algo, pega una imagen o suelta un archivo…"
+          }
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          onChange={(event) => setDraft(event.target.value)}
+          onPaste={(event) => {
+            // Text lands in the box to be edited first; files are added at once.
+            const files = [...event.clipboardData.files];
+            if (!files.length) return;
+            event.preventDefault();
+            void notes.add(files);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+              event.preventDefault();
+              void submit();
+            }
+          }}
+        />
         <button type="button" className={styles.attach} onClick={() => picker.current?.click()}>
-          <Paperclip size={14} aria-hidden /> Adjuntar
+          Adjuntar
         </button>
         <input
           ref={picker}
@@ -202,34 +287,6 @@ export function Notes({ notes, focus }: { notes: NotesState; focus: boolean }) {
           }}
         />
       </div>
-
-      <textarea
-        ref={field}
-        className={styles.capture}
-        rows={1}
-        maxLength={NOTE_TEXT_MAX}
-        value={draft}
-        aria-label="Nueva nota"
-        // The card back's dialog focuses this when it opens.
-        data-autofocus={focus || undefined}
-        placeholder="Anota algo, pega una imagen o suelta un archivo…"
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-        onChange={(event) => setDraft(event.target.value)}
-        onPaste={(event) => {
-          // Text lands in the box to be edited first; files are added at once.
-          const files = [...event.clipboardData.files];
-          if (!files.length) return;
-          event.preventDefault();
-          void notes.add(files);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
-            event.preventDefault();
-            void submit();
-          }
-        }}
-      />
 
       {notes.error && (
         <p className={styles.error} role="alert">
@@ -246,38 +303,56 @@ export function Notes({ notes, focus }: { notes: NotesState; focus: boolean }) {
       )}
       {notes.failed && <p className={styles.error}>No se pudieron cargar las notas.</p>}
 
-      {(notes.uploads.length > 0 || count > 0) && (
-        <ol className={styles.entries}>
+      {notes.notes && count === 0 && notes.uploads.length === 0 && (
+        <p className={styles.empty}>
+          Guarda aquí lo que llegue sobre esta tarjeta: una llamada, una dirección, una captura, un PDF.{" "}
+          {onTouch
+            ? "Pega una imagen o usa Adjuntar."
+            : "Pega con Ctrl+V o suelta un archivo en cualquier parte de la tarjeta."}
+        </p>
+      )}
+
+      {notes.uploads.length > 0 && (
+        <ul className={styles.uploads}>
           {notes.uploads.map((upload) => (
             <li key={upload.key} className={styles.uploading}>
               <LoaderCircle size={16} className={styles.spin} aria-hidden />
               Subiendo {upload.name}…
             </li>
           ))}
-          {notes.notes?.toReversed().map((note) => (
-            <Entry key={note.id} note={note} notes={notes} />
-          ))}
-        </ol>
+        </ul>
       )}
+
+      {byDay(notes.notes ?? [], today).map((group) => (
+        <div key={group.day} className={styles.day}>
+          <h3 className={styles.dayLabel}>{group.day}</h3>
+          <ol className={styles.entries}>
+            {group.notes.map((note) => (
+              <Entry key={note.id} note={note} notes={notes} />
+            ))}
+          </ol>
+        </div>
+      ))}
     </section>
   );
 }
 
 /**
  * Paste and drop anywhere on the card back. A paste into a text field stays
- * there; anywhere else it becomes a note. `over` is true while files hover.
+ * there; anywhere else it becomes a note. `dragged` counts the files that
+ * hover, 0 when none do; a browser keeps their names until the drop.
  */
 export function useNoteTarget(notes: NotesState) {
-  const [over, setOver] = useState(false);
+  const [dragged, setDragged] = useState(0);
   const depth = useRef(0);
 
   const leave = () => {
     depth.current = 0;
-    setOver(false);
+    setDragged(0);
   };
 
   return {
-    over,
+    dragged,
     props: {
       onPaste(event: ClipboardEvent) {
         if (isTyping(event.target)) return;
@@ -289,7 +364,8 @@ export function useNoteTarget(notes: NotesState) {
       onDragEnter(event: DragEvent) {
         if (!carriesFiles(event.dataTransfer)) return;
         depth.current += 1;
-        setOver(true);
+        const files = [...event.dataTransfer.items].filter((item) => item.kind === "file").length;
+        setDragged(Math.max(files, 1));
       },
       onDragLeave(event: DragEvent) {
         if (!carriesFiles(event.dataTransfer)) return;

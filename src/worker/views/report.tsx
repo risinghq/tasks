@@ -44,9 +44,6 @@ function firstLine(description: string): string | undefined {
 const CHECK = raw(
   '<svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.2 5.8l2.2 2.2 4.4-5"/></svg>',
 );
-const LINK_ICON = raw(
-  '<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.8 9.2a2.6 2.6 0 003.7 0l2.2-2.2a2.6 2.6 0 00-3.7-3.7l-.9.9M9.2 6.8a2.6 2.6 0 00-3.7 0L3.3 9a2.6 2.6 0 003.7 3.7l.9-.9"/></svg>',
-);
 
 const COPY_SCRIPT = raw(`<script>
 (function () {
@@ -108,33 +105,29 @@ function ReportRow(props: {
       <span class={kind === "done" ? "mark done" : "mark"} aria-hidden="true">
         {kind === "done" && CHECK}
       </span>
-      <span class="row-main">
-        <span class="row-head">
-          <span class="row-title">{card.title}</span>
-          {props.showLabels && <LabelTag label={label} />}
+      <span class="row-title">{card.title}</span>
+      {props.showLabels && <LabelTag label={label} />}
+      {summary && <span class="row-desc">{summary}</span>}
+      {(card.requester || (kind === "open" && total > 0)) && (
+        <span class="row-meta">
+          {card.requester && (
+            <span class="req">
+              <span class="avatar" aria-hidden="true">
+                {card.requester.charAt(0).toUpperCase()}
+              </span>
+              <span class="req-name">{card.requester}</span>
+            </span>
+          )}
+          {kind === "open" && total > 0 && (
+            <span class="prog">
+              <span class="bar" aria-hidden="true">
+                <span style={{ width: `${(checked / total) * 100}%` }} />
+              </span>
+              {checked} de {total}
+            </span>
+          )}
         </span>
-        {summary && <span class="row-desc">{summary}</span>}
-        {(card.requester || (kind === "open" && total > 0)) && (
-          <span class="row-meta">
-            {card.requester && (
-              <span class="req">
-                <span class="avatar" aria-hidden="true">
-                  {card.requester.charAt(0).toUpperCase()}
-                </span>
-                <span class="req-name">{card.requester}</span>
-              </span>
-            )}
-            {kind === "open" && total > 0 && (
-              <span class="prog">
-                <span class="bar" aria-hidden="true">
-                  <span style={{ width: `${(checked / total) * 100}%` }} />
-                </span>
-                {checked} de {total}
-              </span>
-            )}
-          </span>
-        )}
-      </span>
+      )}
     </div>
   );
 }
@@ -154,22 +147,23 @@ export function ReportPage(props: ReportData) {
       description={`${props.subtitle}: lo hecho cada día, lo que sigue en curso y lo que viene.`}
       share={props.share}
     >
-      <header class="top">
-        <div class="copy-wrap">
-          <button id="copiar" class="copy" type="button" data-elevation="raised">
-            {LINK_ICON}
-            <span class="copy-label" role="status">
-              Copiar enlace
-            </span>
-          </button>
-          <span class="tip" aria-hidden="true">
-            {props.url}
-          </span>
-        </div>
-      </header>
       <main class="column">
-        <h1 class="scope">{props.scopeName}</h1>
-        <p class="sub">{props.subtitle}</p>
+        <header class="top">
+          <div class="heading">
+            <h1 class="scope">{props.scopeName}</h1>
+            <p class="sub">{props.subtitle}</p>
+          </div>
+          <div class="copy-wrap">
+            <button id="copiar" class="copy" type="button">
+              <span class="copy-label" role="status">
+                Copiar enlace
+              </span>
+            </button>
+            <span class="tip" aria-hidden="true">
+              {props.url}
+            </span>
+          </div>
+        </header>
         <div class="week-bar">
           <p class="week">
             Semana {weekNumber(week)} · {weekRangeLabel(week)}

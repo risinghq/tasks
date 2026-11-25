@@ -61,69 +61,66 @@ export function CardFace({
   const total = card.checklist.length;
   const checked = card.checklist.filter((item) => item.done).length;
   const hasDescription = card.description.trim() !== "";
-  const hasMeta = label || card.requester || total > 0 || hasDescription || card.noteCount > 0 || assignee;
+  const hasMeta = label || card.requester || total > 0 || hasDescription || card.noteCount > 0;
   const done = card.list === "hecho";
 
   return (
     <div className={styles.face} data-lifted={lifted} data-elevation={lifted ? "overlay" : "raised"}>
       <div className={styles.titleRow} data-done={done}>
         <Completion done={done} onToggle={onToggleDone} />
-        <div className={styles.title} data-done={done}>
+        <div className={styles.title} data-done={done} data-assigned={Boolean(assignee)}>
           {title ?? card.title}
         </div>
+        {assignee && (
+          <span
+            className={styles.assignee}
+            title={`Responsable: ${assignee.name}`}
+            role="img"
+            aria-label={`Responsable: ${assignee.name}`}
+          >
+            {assignee.name[0]}
+          </span>
+        )}
       </div>
       {hasMeta && (
         <div className={styles.meta}>
-          <div className={styles.metaItems}>
-            {label && (
-              <span className={styles.metaItem} data-label={label.id}>
-                <LabelDot color={label.color} />
-                {label.name}
+          {label && (
+            <span className={styles.metaItem} data-label={label.id}>
+              <LabelDot color={label.color} />
+              {label.name}
+            </span>
+          )}
+          {card.requester && (
+            <span className={styles.metaItem}>
+              <span className={styles.avatar} aria-hidden>
+                {card.requester[0]}
               </span>
-            )}
-            {card.requester && (
-              <span className={styles.metaItem} data-strong>
-                <span className={styles.avatar} aria-hidden>
-                  {card.requester[0]}
-                </span>
-                {card.requester}
-              </span>
-            )}
-            {total > 0 && (
-              <span className={styles.metaItem} data-complete={checked === total}>
-                <span
-                  className={styles.ring}
-                  style={{ "--p": `${(checked / total) * 100}%` } as CSSProperties}
-                  aria-hidden
-                />
-                {checked}/{total}
-              </span>
-            )}
-            {hasDescription && (
-              <span className={styles.metaItem} data-faint>
-                <AlignLeft size={14} aria-label="Tiene descripción" />
-              </span>
-            )}
-            {card.noteCount > 0 && (
+              {card.requester}
+            </span>
+          )}
+          {total > 0 && (
+            <span className={styles.metaItem} data-complete={checked === total}>
               <span
-                className={styles.metaItem}
-                data-faint
-                role="img"
-                aria-label={card.noteCount === 1 ? "1 nota" : `${card.noteCount} notas`}
-              >
-                <StickyNote size={14} aria-hidden />
-                {card.noteCount}
-              </span>
-            )}
-          </div>
-          {assignee && (
+                className={styles.ring}
+                style={{ "--p": `${(checked / total) * 100}%` } as CSSProperties}
+                aria-hidden
+              />
+              {checked}/{total}
+            </span>
+          )}
+          {card.noteCount > 0 && (
             <span
-              className={styles.assignee}
-              title={`Responsable: ${assignee.name}`}
+              className={styles.metaItem}
               role="img"
-              aria-label={`Responsable: ${assignee.name}`}
+              aria-label={card.noteCount === 1 ? "1 nota" : `${card.noteCount} notas`}
             >
-              {assignee.name[0]}
+              <StickyNote size={12} aria-hidden />
+              {card.noteCount}
+            </span>
+          )}
+          {hasDescription && (
+            <span className={styles.metaItem}>
+              <AlignLeft size={12} aria-label="Tiene descripción" />
             </span>
           )}
         </div>

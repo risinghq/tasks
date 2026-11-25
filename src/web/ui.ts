@@ -12,6 +12,8 @@ export type Ui = {
   toggleDone: (id: string) => void;
   /** The composer that is open, by container id. Only one is open at a time. */
   composer: string | null;
+  /** Quick edit's buttons sit where "Añade una tarjeta" is, so the add buttons hide while it is open. */
+  quickEditing: boolean;
   /** The card that dragged files hover, which takes them as notes on drop. */
   fileOver: string | null;
   setComposer: (id: string | null) => void;

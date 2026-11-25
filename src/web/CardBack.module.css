@@ -16,16 +16,35 @@
 /* Covers the dialog while files are dragged over it. It must not catch the drag itself. */
 .drop {
   position: absolute;
-  inset: var(--space-2);
+  inset: 0;
   z-index: 1;
-  display: grid;
-  place-items: center;
-  border: 2px dashed var(--focus);
-  border-radius: 0.75rem;
-  background: color-mix(in srgb, var(--overlay) 88%, transparent);
-  color: var(--text);
-  font-weight: var(--weight-strong);
+  background: color-mix(in oklch, var(--overlay) 93%, transparent);
   pointer-events: none;
+}
+
+.dropBox {
+  position: absolute;
+  inset: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-6);
+  border: 2px dashed var(--text-accent);
+  border-radius: var(--radius-lg);
+  text-align: center;
+}
+
+.dropTitle {
+  font-size: var(--text-xl);
+  line-height: var(--leading-tight);
+  font-weight: var(--weight-strong);
+}
+
+.dropHint {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
 }
 
 .dialog::backdrop {
@@ -44,7 +63,13 @@
   flex: none;
   align-items: center;
   gap: var(--space-1);
-  padding: 0.625rem 0.625rem 0 1.25rem;
+  padding: 0.625rem 0.625rem 0.375rem 1.25rem;
+  box-shadow: 0 1px transparent;
+  transition: box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.bar[data-scrolled="true"] {
+  box-shadow: 0 1px var(--line);
 }
 
 .context {
@@ -56,6 +81,12 @@
   color: var(--text-muted);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.barTitle {
+  font-size: 0.9375rem;
+  font-weight: var(--weight-strong);
+  color: var(--text);
 }
 
 .icon,
@@ -89,9 +120,9 @@
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 1.75rem;
+  gap: var(--space-6);
   min-height: 0;
-  padding: 0.375rem 2rem 2rem;
+  padding: var(--space-2) 2rem 2rem;
   overflow-y: auto;
 }
 
@@ -116,10 +147,10 @@
 .doneCircle {
   display: grid;
   place-items: center;
-  width: 1.625rem;
-  height: 1.625rem;
+  width: 1.5rem;
+  height: 1.5rem;
   border-radius: var(--radius-full);
-  box-shadow: inset 0 0 0 2px var(--line-strong);
+  box-shadow: inset 0 0 0 1.5px var(--text-muted);
   color: transparent;
   transition:
     background-color var(--duration-fast) var(--ease-out),
@@ -144,7 +175,7 @@
   font-size: clamp(1.375rem, 1.8vw, 1.625rem);
   line-height: var(--leading-tight);
   font-weight: var(--weight-strong);
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
   resize: none;
   overflow: hidden;
   transition: box-shadow var(--duration-fast) var(--ease-out);
@@ -157,7 +188,7 @@
 
 .grid {
   display: grid;
-  grid-template-columns: 6.5rem minmax(0, 1fr);
+  grid-template-columns: 7.5rem minmax(0, 1fr);
   align-items: center;
   row-gap: 2px;
   padding-left: var(--space-1);
@@ -218,10 +249,16 @@
   width: 1.25rem;
   height: 1.25rem;
   border-radius: var(--radius-full);
-  background: var(--field-background);
-  box-shadow: inset 0 0 0 1px var(--line-strong);
+  box-shadow: inset 0 0 0 1px var(--text-muted);
   font-size: 0.625rem;
-  font-weight: var(--weight-strong);
+  font-weight: 700;
+}
+
+/* As on the board: the person doing the work is filled, the one who asked is outlined. */
+.avatar[data-assignee] {
+  background: var(--accent-wash);
+  box-shadow: none;
+  color: var(--text-accent);
 }
 
 .addChecklist {
@@ -344,6 +381,15 @@
 
   .body {
     padding: var(--space-2) 1.25rem 2.5rem;
+  }
+
+  .grid {
+    grid-template-columns: 6.75rem minmax(0, 1fr);
+  }
+
+  /* The narrow bar has room for the title alone. */
+  .bar[data-scrolled="true"] .barPlace {
+    display: none;
   }
 
   .pickerSheet {
