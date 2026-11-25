@@ -8,6 +8,7 @@ import type {
   ListId,
   Me,
   Member,
+  Note,
   ReportLink,
   Workspace,
   WorkspaceRole,
@@ -24,14 +25,17 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, method = "GET", json?: unknown): Promise<T> {
+/** `body` is sent as JSON, or as multipart when it is form data: the browser then sets the boundary. */
+async function request<T>(path: string, method = "GET", body?: unknown): Promise<T> {
   const headers: Record<string, string> = {};
   const workspace = storedWorkspace();
   if (workspace) headers["X-Workspace"] = workspace;
   const init: RequestInit = { method, headers };
-  if (json !== undefined) {
+  if (body instanceof FormData) {
+    init.body = body;
+  } else if (body !== undefined) {
     headers["Content-Type"] = "application/json";
-    init.body = JSON.stringify(json);
+    init.body = JSON.stringify(body);
   }
   const res = await fetch(path, init);
   if (res.status === 401) {
@@ -59,6 +63,15 @@ export const api = {
   move: (id: string, placement: Placement, index: number) =>
     request<Card>(`/api/cards/${id}/move`, "POST", { ...placement, index }),
   remove: (id: string) => request<void>(`/api/cards/${id}`, "DELETE"),
+  notes: (cardId: string) => request<Note[]>(`/api/cards/${cardId}/notes`),
+  addNote: (cardId: string, text: string) => request<Note>(`/api/cards/${cardId}/notes`, "POST", { text }),
+  uploadNote: (cardId: string, file: File) => {
+    const form = new FormData();
+    form.set("file", file);
+    return request<Note>(`/api/cards/${cardId}/notes/files`, "POST", form);
+  },
+  updateNote: (id: string, text: string) => request<Note>(`/api/notes/${id}`, "PATCH", { text }),
+  removeNote: (id: string) => request<void>(`/api/notes/${id}`, "DELETE"),
   createLabel: (label: CreateLabel) => request<Label>("/api/labels", "POST", label),
   updateLabel: (id: string, patch: UpdateLabel) => request<Label>(`/api/labels/${id}`, "PATCH", patch),
   removeLabel: (id: string) => request<void>(`/api/labels/${id}`, "DELETE"),

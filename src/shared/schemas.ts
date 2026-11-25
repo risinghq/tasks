@@ -5,6 +5,7 @@ import {
   CHECKLIST_TEXT_MAX,
   LABEL_COLORS,
   LISTS,
+  NOTE_TEXT_MAX,
   TITLE_MAX,
   WORKSPACE_NAME_MAX,
   WORKSPACE_ROLES,
@@ -102,6 +103,11 @@ export const updateWorkspaceSchema = z.object({ name: workspaceName });
 
 export const addMemberSchema = z.object({ email, name: userName.optional(), role: z.enum(WORKSPACE_ROLES) });
 export const updateMemberSchema = z.object({ role: z.enum(WORKSPACE_ROLES) });
+
+const noteText = z.string().trim().max(NOTE_TEXT_MAX);
+export const createNoteSchema = z.object({ text: noteText.min(1) });
+/** Empty text is allowed on a note that holds a file. */
+export const updateNoteSchema = z.object({ text: noteText });
 
 export type CreateCard = z.infer<typeof createCardSchema>;
 export type UpdateCard = z.infer<typeof updateCardSchema>;

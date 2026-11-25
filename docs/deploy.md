@@ -20,8 +20,13 @@ Actions:
 | Variable | `D1_DATABASE_ID`        | The `database_id` that `d1 create` printed.  |
 
 Create the token on the Account API tokens page of the Cloudflare dashboard:
-Create Token, then a custom token. Give it two permissions, both on the account:
-Workers Scripts Edit and D1 Edit. Limit the resources to your account.
+Create Token, then a custom token. Give it three permissions, all on the
+account: Workers Scripts Edit, D1 Edit and Workers R2 Storage Edit. Limit the
+resources to your account.
+
+Before the deploy, the workflow creates the R2 bucket `tasks-files`, which holds
+the files attached to notes, when it does not exist yet. R2 must be enabled on
+the account once, in the dashboard.
 
 `wrangler.jsonc` keeps the placeholder `REPLACE_WITH_DATABASE_ID`. The workflow
 runs [`scripts/set-database-id.ts`](../scripts/set-database-id.ts) to put

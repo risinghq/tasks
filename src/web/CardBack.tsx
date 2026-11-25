@@ -8,6 +8,8 @@ import { LabelDot } from "./CardView";
 import { useModal } from "./Dialog";
 import { Description } from "./Description";
 import { LabelPicker } from "./LabelPicker";
+import { Notes, useNoteTarget } from "./Notes";
+import { useNotes, type NoteActions } from "./useNotes";
 import { AssigneePicker, DatePicker, ListPicker, RequesterPicker } from "./Pickers";
 import { Sheet } from "./Sheet";
 import styles from "./CardBack.module.css";
@@ -160,9 +162,14 @@ export function CardBack(props: {
   workspace: string;
   requesters: string[];
   actions: CardActions & { remove: () => void; toggleDone: () => void };
+  noteActions: NoteActions;
+  /** Opened to take a note: the note box gets the focus. */
+  focusNotes: boolean;
   onClose: () => void;
 }) {
   const { card, actions } = props;
+  const notes = useNotes(card.id, props.noteActions);
+  const target = useNoteTarget(notes);
   const { labels, members } = useUi();
   const chosen = labels.find((known) => known.id === card.labelId);
   const assignee = members.find((member) => member.id === card.assigneeId);
@@ -186,7 +193,13 @@ export function CardBack(props: {
       data-elevation="modal"
       aria-label="Tarjeta"
       onClose={props.onClose}
+      {...target.props}
     >
+      {target.over && (
+        <div className={styles.drop} aria-hidden>
+          Suelta para añadir a Notas
+        </div>
+      )}
       <header className={styles.bar}>
         <span className={styles.context}>
           {props.workspace} · {LIST_TITLES[card.list]}
@@ -198,7 +211,11 @@ export function CardBack(props: {
           aria-haspopup="menu"
           aria-expanded={menu !== null}
           data-open={menu !== null}
-          onClick={(event) => setMenu((open) => (open ? null : event.currentTarget))}
+          onClick={(event) => {
+            // The updater can run after dispatch, when currentTarget is already null.
+            const button = event.currentTarget;
+            setMenu((open) => (open ? null : button));
+          }}
         >
           <Ellipsis size={16} aria-hidden />
         </button>
@@ -316,6 +333,7 @@ export function CardBack(props: {
             <Plus size={16} aria-hidden /> Añadir checklist
           </button>
         )}
+        <Notes notes={notes} focus={props.focusNotes} />
       </div>
 
       {menu && (

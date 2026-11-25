@@ -9,6 +9,7 @@ import type {
   LabelColor,
   Me,
   Member,
+  Note,
   ReportLink,
   Workspace,
   WorkspaceRole,
@@ -25,6 +26,7 @@ type Init = {
   address?: string;
   form?: Record<string, string>;
   raw?: { body: string; type: string };
+  multipart?: FormData;
 };
 
 export function send(path: string, init: Init = {}): Promise<Response> {
@@ -35,13 +37,15 @@ export function send(path: string, init: Init = {}): Promise<Response> {
   if (init.address) headers.set("CF-Connecting-IP", init.address);
   if (init.json !== undefined) headers.set("Content-Type", "application/json");
   if (init.raw) headers.set("Content-Type", init.raw.type);
-  const body = init.raw
-    ? init.raw.body
-    : init.form
-      ? new URLSearchParams(init.form)
-      : init.json !== undefined
-        ? JSON.stringify(init.json)
-        : undefined;
+  const body = init.multipart
+    ? init.multipart
+    : init.raw
+      ? init.raw.body
+      : init.form
+        ? new URLSearchParams(init.form)
+        : init.json !== undefined
+          ? JSON.stringify(init.json)
+          : undefined;
   return exports.default.fetch(
     new Request(`https://tasks.test${path}`, {
       method: init.method ?? "GET",
@@ -92,6 +96,15 @@ export function clientFor(cookie: string, workspace?: string) {
     addLabel: (name: string, color: LabelColor = "green") =>
       call<Label>("/api/labels", "POST", { name, color }),
     me: () => call<Me>("/api/me"),
+    notes: (cardId: string) => call<Note[]>(`/api/cards/${cardId}/notes`),
+    addNote: (cardId: string, text: string) => call<Note>(`/api/cards/${cardId}/notes`, "POST", { text }),
+    /** Uploads a file as a note. Returns the raw response, since some uploads must fail. */
+    upload: (cardId: string, file: File, text?: string) => {
+      const form = new FormData();
+      form.set("file", file);
+      if (text !== undefined) form.set("text", text);
+      return send(`/api/cards/${cardId}/notes/files`, { method: "POST", multipart: form, cookie, workspace });
+    },
     reportLinks: () => call<ReportLink[]>("/api/report-links"),
     /** The token of the whole-workspace link, which `GET /api/report-links` lists first. */
     wholeReportToken: async () => (await call<ReportLink[]>("/api/report-links"))[0]!.token,

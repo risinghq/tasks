@@ -98,6 +98,32 @@ export const cards = sqliteTable(
 );
 
 /**
+ * One entry in a card's log: text, a file, or both. The file body lives in R2
+ * under the key `files.ts` derives from the workspace, card and note ids.
+ * Notes never appear on a report.
+ */
+export const notes = sqliteTable(
+  "notes",
+  {
+    id: text().primaryKey(),
+    cardId: text("card_id")
+      .notNull()
+      .references(() => cards.id, { onDelete: "cascade" }),
+    authorId: text("author_id").references(() => users.id, { onDelete: "set null" }),
+    /** Unix seconds. */
+    createdAt: integer("created_at").notNull(),
+    text: text().notNull().default(""),
+    fileName: text("file_name"),
+    fileType: text("file_type"),
+    fileSize: integer("file_size"),
+  },
+  (table) => [
+    index("notes_card").on(table.cardId, table.createdAt),
+    check("notes_not_empty", sql`${table.text} <> '' or ${table.fileName} is not null`),
+  ],
+);
+
+/**
  * One shared read-only link to the weekly report. `label_id` limits the report
  * to the cards of one label, `member_id` to the cards assigned to one member.
  * With both null the link shows the whole workspace.

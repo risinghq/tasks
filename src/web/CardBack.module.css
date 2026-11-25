@@ -13,6 +13,21 @@
   animation: appear var(--duration-slow) var(--ease-out);
 }
 
+/* Covers the dialog while files are dragged over it. It must not catch the drag itself. */
+.drop {
+  position: absolute;
+  inset: var(--space-2);
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  border: 2px dashed var(--focus);
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--overlay) 88%, transparent);
+  color: var(--text);
+  font-weight: var(--weight-strong);
+  pointer-events: none;
+}
+
 .dialog::backdrop {
   background: var(--scrim);
 }

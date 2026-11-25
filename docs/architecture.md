@@ -29,6 +29,9 @@ e2e          Playwright tests that drive the app in Chromium
    role. `/api/tokens` (`routes/tokens.ts`) manages the user's API tokens.
    `/api/report-links` (`routes/report-links.ts`) lists the shared report links,
    and creating, regenerating or deleting one needs the owner role.
+   `/api/cards/<id>/notes` and `/api/notes/<id>` (`routes/notes.ts`) keep a
+   card's notes. `/api/files/<noteId>` is mounted before the workspace check
+   (see Notes).
 4. `/r/<token>` (`routes/report.tsx`), public.
 5. `/assets/*`, `/fonts/*`, `/og/*` and `/favicon.svg`, public static files.
 6. Everything else needs the session and returns the React app, including a
@@ -276,6 +279,33 @@ reopens the dialog.
 
 The report sends `X-Robots-Tag: noindex, nofollow` and
 `Cache-Control: no-store`.
+
+### Notes
+
+A card keeps a log of notes in `notes`: text, a file, or both, with the author
+and the time in Unix seconds. A check constraint refuses a note with neither.
+Notes belong to the card and go with it; a report never reads them. A card
+carries `noteCount` so the board shows the count without loading the notes.
+
+The file body lives in the R2 bucket `FILES` under `<workspace>/<card>/<note>`
+(`files.ts`). Deleting a card or a workspace deletes its files by prefix, and
+deleting a note deletes its file. `POST /api/cards/<id>/notes/files` takes one
+multipart `file` of at most 25 MB (`NOTE_FILE_MAX`), else 413. The server picks
+every note id.
+
+`GET /api/files/<noteId>` serves a file. An `<img>` cannot send the
+`X-Workspace` header, so the route is mounted before the workspace check, finds
+the workspace from the note and checks the user's membership itself. Anyone else
+gets 404. Pictures, PDFs and plain text are served inline; any other type is a
+download as `application/octet-stream`, with `nosniff`, so an uploaded page
+never runs on the app's origin.
+
+In the browser, `useBoard` adds, edits and deletes notes and keeps `noteCount`
+in step. A note on a card whose create is still pending waits for the create.
+Text longer than `NOTE_TEXT_MAX` becomes a `texto.txt` file. `useNotes` holds
+the card back's list. A paste outside a text field and a file drop become notes:
+on the card back anywhere (`useNoteTarget`), and on the board for the card under
+the pointer (`useShortcuts` for paste, `useCardFileDrop` for drop).
 
 ## Dates
 

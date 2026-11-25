@@ -15,8 +15,8 @@ export class InvalidCard extends Error {}
 /** A create named an id that another workspace's card already has. */
 export class CardIdTaken extends Error {}
 
-/** The columns of a `Card`. `workspace_id` never leaves the module. */
-const cardColumns = {
+/** The stored columns of a `Card`. `workspace_id` never leaves the module. */
+const ownColumns = {
   id: cards.id,
   title: cards.title,
   description: cards.description,
@@ -27,6 +27,13 @@ const cardColumns = {
   list: cards.list,
   position: cards.position,
   doneDate: cards.doneDate,
+};
+
+const cardColumns = {
+  ...ownColumns,
+  // Written out: drizzle drops the table name of `cards.id` in a one-table select,
+  // and an unqualified `id` here would mean `notes.id`.
+  noteCount: sql<number>`(select count(*) from notes where notes.card_id = cards.id)`,
 };
 
 const byBoardOrder = [asc(cards.list), asc(cards.doneDate), asc(cards.position)];
@@ -181,9 +188,9 @@ export function cardsOf(db: Db, workspaceId: string, scope: CardScope = {}) {
           position: endOfGroup(workspaceId, placement),
         })
         .onConflictDoNothing()
-        .returning(cardColumns)
+        .returning(ownColumns)
         .get();
-      if (created) return created;
+      if (created) return { ...created, noteCount: 0 };
       const existing = await get(id);
       if (!existing) throw new CardIdTaken();
       return existing;

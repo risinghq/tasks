@@ -16,7 +16,17 @@ async function workspaceWith(page: Page, name: string, members: { email: string;
   }
   return {
     async card(title: string) {
-      await page.request.post("/api/cards", { headers, data: { title, list: "en_curso" } });
+      const res = await page.request.post("/api/cards", { headers, data: { title, list: "en_curso" } });
+      return ((await res.json()) as { id: string }).id;
+    },
+    async note(cardId: string, text: string) {
+      await page.request.post(`/api/cards/${cardId}/notes`, { headers, data: { text } });
+    },
+    async file(cardId: string, fileName: string) {
+      await page.request.post(`/api/cards/${cardId}/notes/files`, {
+        headers,
+        multipart: { file: { name: fileName, mimeType: "application/pdf", buffer: Buffer.from("%PDF") } },
+      });
     },
     async label(labelName: string) {
       await page.request.post("/api/labels", { headers, data: { name: labelName, color: "blue" } });
@@ -87,7 +97,9 @@ test("no board view, hovered card, quick edit, card back or share dialog scrolls
   const space = await workspaceWith(page, "Ancho E2E", [
     { email: `larga-${Date.now()}@tasks.test`, name: `${long} Apellido` },
   ]);
-  await space.card(`${long} ${long}`);
+  const longCard = await space.card(`${long} ${long}`);
+  await space.note(longCard, `${long} https://maps.example.com/${long}${long}?q=${long}`);
+  await space.file(longCard, `${long}-${long}.pdf`);
   await space.card(wrapping);
   await space.label(`Cliente ${long}`);
   await tasks.open();
@@ -108,8 +120,8 @@ test("no board view, hovered card, quick edit, card back or share dialog scrolls
     await page.keyboard.press("Escape");
 
     await card(page, long).click();
-    await expect(page.getByRole("dialog", { name: "Tarjeta" })).toBeVisible();
-    expect(await page.evaluate<string[]>(SIDEWAYS), `card back at ${width}px`).toEqual([]);
+    await expect(page.getByRole("dialog", { name: "Tarjeta" }).locator("[data-note-id]")).toHaveCount(2);
+    expect(await page.evaluate<string[]>(SIDEWAYS), `card back with notes at ${width}px`).toEqual([]);
     await page.keyboard.press("Escape");
 
     await switcherShare(page);
