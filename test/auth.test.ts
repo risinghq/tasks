@@ -71,6 +71,12 @@ describe("access", () => {
     expect(html).not.toContain("noindex");
   });
 
+  it("gives the landing page a share card with an absolute image", async () => {
+    const html = await (await send("/")).text();
+    expect(html).toMatch(/property="og:image" content="https?:\/\/[^"]+\/og\/home\.png"/);
+    expect(html).toContain('name="twitter:card" content="summary_large_image"');
+  });
+
   it("sends other page loads to the login page", async () => {
     const res = await send("/cards/abc");
     expect(res.status).toBe(302);

@@ -7,7 +7,7 @@ src/shared   model, schemas and date rules used by both sides
 src/worker   Hono app, D1 queries, auth
 src/web      React app: board, dialogs, drag and drop
 src/import   Trello export to cards
-scripts      import-trello, prepare-dev, dev-account, log
+scripts      import-trello, prepare-dev, dev-account, log, og
 drizzle      generated migrations
 test         tests that drive the Worker over HTTP
 e2e          Playwright tests that drive the app in Chromium
@@ -30,12 +30,19 @@ e2e          Playwright tests that drive the app in Chromium
    `/api/report-links` (`routes/report-links.ts`) lists the shared report links,
    and creating, regenerating or deleting one needs the owner role.
 4. `/r/<token>` (`routes/report.tsx`), public.
-5. `/assets/*`, `/fonts/*` and `/favicon.svg`, public static files.
+5. `/assets/*`, `/fonts/*`, `/og/*` and `/favicon.svg`, public static files.
 6. Everything else needs the session and returns the React app, including a
    card's own page, `/c/<id>`.
 
 Without a session, a page request redirects to `/login` and an API request gets
 401 (`session.ts`).
+
+The landing page and the report page carry Open Graph and Twitter tags, so a
+pasted link unfurls as a 1200x630 card. `scripts/og.tsx` renders
+`public/og/home.png` and `public/og/report.png` with satori and resvg at the
+start of `bun run build`; the folder is not committed. `shareOf` in
+`views/layout.tsx` builds the absolute image URL from the request's origin. A
+report's `og:url` drops `?semana`, so every week unfurls as the same link.
 
 ## Users and workspaces
 

@@ -60,6 +60,15 @@ describe("weekly report", () => {
     expect(html).toContain("← Semana 41");
   });
 
+  it("unfurls as the report card, under the link without its week", async () => {
+    const { token } = await seeded();
+    const html = await (await report(token)).text();
+
+    expect(html).toContain(`property="og:url" content="https://tasks.test/r/${token}"`);
+    expect(html).toContain('property="og:image" content="https://tasks.test/og/report.png"');
+    expect(html).toContain('property="og:description" content="Informe semanal de Ana Prueba:');
+  });
+
   it("shows what was done, grouped by day, newest first", async () => {
     const { token } = await seeded();
     const html = await (await report(token)).text();

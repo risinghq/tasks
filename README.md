@@ -31,11 +31,12 @@ sign in with a cookie signed by `SESSION_SECRET` instead.
 - "Añade una tarjeta" at the foot of a list opens a composer. Enter adds the
   card and keeps the composer open for the next one. The composer in Hecho adds
   to today.
-- Hovering a card shows a circle left of the title and an edit button in its
-  corner. The circle moves the card to the top of today in Hecho. In Hecho, the
-  green check moves it back to En curso.
+- Every card shows a circle left of the title. Hovering a card shows an edit
+  button in its corner. The circle moves the card to the top of today in Hecho.
+  In Hecho, the filled check moves it back to En curso.
 - The edit button, or `e` while hovering the card, edits the title in place and
-  lists the card's actions beside it.
+  lists the card's actions beside it: to its right, else to its left, else under
+  it on a narrow screen.
 - A click opens the card. Each field in it saves on its own. The list button in
   its header moves the card. Its address is `/c/<id>`, and the browser's back
   button closes it.

@@ -7,32 +7,23 @@ import styles from "./CardView.module.css";
 import { useUi } from "./ui";
 
 /**
- * The card's completion control: a circle that shows on hover, or the green
- * check of a card in Hecho. Without `onToggle` it is only a picture.
+ * The card's completion control: an empty circle, or the green check of a card
+ * in Hecho. Without `onToggle` it is only a picture.
  */
-export function Completion({
-  done,
-  size,
-  onToggle,
-}: {
-  done: boolean;
-  size: "card" | "back";
-  onToggle?: () => void;
-}) {
-  const icon = done ? <Check size={size === "card" ? 10 : 24} strokeWidth={3} aria-hidden /> : null;
+function Completion({ done, onToggle }: { done: boolean; onToggle?: () => void }) {
+  const icon = done ? <Check size={10} strokeWidth={3} aria-hidden /> : null;
   if (!onToggle) {
-    return done ? (
-      <span className={styles.complete} data-done data-size={size}>
+    return (
+      <span className={styles.complete} data-done={done} aria-hidden>
         {icon}
       </span>
-    ) : null;
+    );
   }
   return (
     <button
       type="button"
       className={styles.complete}
       data-done={done}
-      data-size={size}
       aria-label={done ? "Mover a En curso" : "Marcar como hecha"}
       onPointerDown={(event) => event.stopPropagation()}
       onKeyDown={(event) => event.stopPropagation()}
@@ -52,7 +43,7 @@ export function LabelDot({ color }: { color: Parameters<typeof labelStyle>[0] })
 }
 
 /** The card as it looks on the board. `title` replaces the title text, for quick
- * edit. `onToggleDone` adds the completion circle. */
+ * edit. `onToggleDone` makes the completion circle a button. */
 export function CardFace({
   card,
   title,
@@ -76,7 +67,7 @@ export function CardFace({
   return (
     <div className={styles.face} data-lifted={lifted} data-elevation={lifted ? "overlay" : "raised"}>
       <div className={styles.titleRow} data-done={done}>
-        <Completion done={done} size="card" onToggle={onToggleDone} />
+        <Completion done={done} onToggle={onToggleDone} />
         <div className={styles.title} data-done={done}>
           {title ?? card.title}
         </div>

@@ -5,7 +5,7 @@
   "scripts": {
     "predev": "bun scripts/prepare-dev.ts",
     "dev": "vite",
-    "build": "vite build",
+    "build": "bun scripts/og.tsx && vite build",
     "preview": "vite preview",
     "deploy": "bun run build && wrangler deploy",
     "db:generate": "drizzle-kit generate",
@@ -37,7 +37,9 @@
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.66.0",
     "@cloudflare/vitest-plugin": "^1.4.11",
+    "@fontsource/inter": "^5.3.0",
     "@playwright/test": "^1.64.1",
+    "@resvg/resvg-js": "^2.6.2",
     "@types/node": "^26.6.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
@@ -45,6 +47,7 @@
     "drizzle-kit": "^0.31.11",
     "oxfmt": "^0.75.0",
     "oxlint": "^1.90.0",
+    "satori": "^0.63.2",
     "typescript": "^7.0.2",
     "vite": "^8.3.5",
     "vitest": "^5.0.5",

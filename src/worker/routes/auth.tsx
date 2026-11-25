@@ -7,6 +7,7 @@ import { authorizeUrl, CALLBACK_PATH, identify, newHandshake } from "../google";
 import { endSession, sessionUser, startSession, type AppEnv } from "../session";
 import { findOrCreateUser } from "../users";
 import { LandingPage } from "../views/landing";
+import { shareOf } from "../views/layout";
 import { LoginPage } from "../views/login";
 
 export const auth = new Hono<AppEnv>();
@@ -19,7 +20,7 @@ const handshakeCookie = { httpOnly: true, secure: true, sameSite: "Lax", path: "
 /** Signed-in visitors fall through to the board. */
 auth.get("/", async (c, next) => {
   if (await sessionUser(c)) return next();
-  return c.html(<LandingPage />);
+  return c.html(<LandingPage share={shareOf(new URL(c.req.url), "home")} />);
 });
 
 auth.get("/login", async (c) => {

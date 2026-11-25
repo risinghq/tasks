@@ -6,6 +6,7 @@ import { connect } from "../db/client";
 import { labelsOf } from "../labels";
 import { reportLinkByToken, workspaceForReport } from "../report-links";
 import { findUser } from "../users";
+import { shareOf } from "../views/layout";
 import { ReportPage } from "../views/report";
 
 export const report = new Hono<{ Bindings: Env }>();
@@ -54,6 +55,7 @@ report.get("/:token", async (c) => {
       showLabels={!link.labelId}
       today={today}
       url={url.host + url.pathname + url.search}
+      share={shareOf(url, "report")}
       days={days}
       open={open}
       labels={labels}

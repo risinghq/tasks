@@ -1,7 +1,7 @@
 /** @jsxImportSource hono/jsx */
 import { Fragment } from "hono/jsx";
 import { raw } from "hono/html";
-import { Document } from "./layout";
+import { Document, type Share } from "./layout";
 import css from "./landing.css?raw";
 
 const MANIFESTO =
@@ -32,16 +32,17 @@ const LISTS: [string, string[]][] = [
 const POINTS: [string, string][] = [
   ["Espacios", "Personal, Empresa A, Empresa B. Cada uno con su tablero, sus etiquetas y sus miembros."],
   ["Cuatro listas", "Pendiente, Esta semana, En curso y Hecho. Arrastra una tarjeta para avanzarla."],
-  ["Informe semanal", "Un enlace con lo que terminaste, agrupado por espacio. Cópialo y compártelo."],
+  ["Informe semanal", "Un enlace por cliente o persona, con lo hecho cada día. Cada uno ve solo lo suyo."],
 ];
 
-export function LandingPage() {
+export function LandingPage(props: { share: Share }) {
   return (
     <Document
       title="Tareas: tu semana en un solo tablero"
       css={css}
-      description="Un tablero semanal para repartir el trabajo entre espacios, con un informe que se comparte con un enlace."
+      description="Un tablero semanal para repartir el trabajo de cada cliente, con un informe que cada uno recibe con su propio enlace."
       indexable
+      share={props.share}
     >
       <main>
         <div class="top">
