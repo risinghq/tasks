@@ -636,7 +636,7 @@ test.describe("keyboard shortcuts", () => {
     await page.mouse.move(0, 400);
     await page.keyboard.press("?");
     const help = page.getByRole("dialog", { name: "Atajos de teclado" });
-    await expect(help.getByRole("row")).toHaveCount(7);
+    await expect(help.getByRole("row")).toHaveCount(9);
     await page.keyboard.press("Escape");
     await expect(help).toBeHidden();
 

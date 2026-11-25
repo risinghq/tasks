@@ -13,6 +13,7 @@ beforeEach(async () => {
   await env.DB.batch([
     env.DB.prepare("DELETE FROM api_tokens"),
     env.DB.prepare("DELETE FROM report_links"),
+    env.DB.prepare("DELETE FROM notes"),
     env.DB.prepare("DELETE FROM cards"),
     env.DB.prepare("DELETE FROM labels"),
     env.DB.prepare("DELETE FROM login_attempts"),

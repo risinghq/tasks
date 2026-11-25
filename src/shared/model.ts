@@ -41,6 +41,10 @@ export const ROLE_TITLES: Record<WorkspaceRole, string> = {
 
 export const WORKSPACE_NAME_MAX = 60;
 
+export const NOTE_TEXT_MAX = 10_000;
+/** The largest file a note takes, in bytes. */
+export const NOTE_FILE_MAX = 25 * 1024 * 1024;
+
 export type Label = { id: string; name: string; color: LabelColor };
 
 export type ChecklistItem = { text: string; done: boolean };
@@ -59,6 +63,24 @@ export type Card = {
   position: number;
   /** Lima date, `YYYY-MM-DD`. Set exactly when the card is in Hecho. */
   doneDate: string | null;
+  /** How many notes the card's log holds. */
+  noteCount: number;
+};
+
+/** A file attached to a note. `url` serves it to members of the card's workspace. */
+export type NoteFile = { name: string; type: string; size: number; url: string };
+
+/**
+ * One entry in a card's log: something that happened or arrived, kept as it
+ * came. `createdAt` is unix seconds. The author is null once they are deleted.
+ */
+export type Note = {
+  id: string;
+  cardId: string;
+  author: Person | null;
+  createdAt: number;
+  text: string;
+  file: NoteFile | null;
 };
 
 export type Board = {

@@ -74,7 +74,7 @@ async function idOf(card: TrelloCard, index: number, ownerKey: string): Promise<
 }
 
 export type ImportedLabel = { name: string; color: LabelColor };
-export type ImportedCard = Omit<Card, "position" | "labelId" | "assigneeId"> & {
+export type ImportedCard = Omit<Card, "position" | "labelId" | "assigneeId" | "noteCount"> & {
   label: ImportedLabel | null;
 };
 

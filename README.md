@@ -4,7 +4,7 @@ A work log for a small team. Each person keeps a Trello-style board of their
 own, with four lists (Pendiente, Esta semana, En curso, Hecho) where finished
 cards fall into one lane per day, and shares a read-only weekly report as a
 link. The interface is in Spanish. It runs as one Cloudflare Worker with a D1
-database.
+database and an R2 bucket for the files attached to notes.
 
 ## Run it
 
@@ -50,9 +50,15 @@ sign in with a cookie signed by `SESSION_SECRET` instead.
   The filter is in the address, so a reload keeps it.
 - A click on a label stripe turns every stripe into a pill with the label's
   name, and back.
+- Notas, in the card back, is the card's log: a phone call, an address, a
+  screenshot, a PDF. Type and press Enter, paste a picture, drop files anywhere
+  on the card back or pick them with Adjuntar. Each note keeps its author and
+  time, and can be edited or deleted. On the board, Ctrl+V pastes over the card
+  under the pointer and files dropped on a card land in its notes. A file is at
+  most 25 MB. Notes never show in a report.
 - Shortcuts, when the focus is not in a text field: `n` opens the composer of
-  the list under the pointer, `e` edits a card, `f` opens the filter, `x` clears
-  it and `?` shows the list of shortcuts.
+  the list under the pointer, `e` edits a card, `a` opens a card to take a note,
+  `f` opens the filter, `x` clears it and `?` shows the list of shortcuts.
 - A card dropped into Hecho gets today's date in America/Lima. Dropped on a day
   header, it gets that day. Moving it out clears the date. The card changes the
   date for work finished earlier.

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Card, Label, Person } from "../shared/model";
+import { NOTE_FILE_MAX, NOTE_TEXT_MAX, type Card, type Label, type Note, type Person } from "../shared/model";
 import type { CreateLabel, UpdateLabel } from "../shared/schemas";
 import { api, ApiError, removeOnExit } from "./api";
 import { project, serverIndex, settled, type Fields, type Op, type Pending } from "./boardState";
@@ -49,6 +49,18 @@ function labelError(error: unknown): string {
   return "No se pudo guardar la etiqueta.";
 }
 
+/** A saved note, or the message that says why it was not. */
+export type NoteResult = { note: Note } | { error: string };
+
+const tooLarge = (file: File) => `${file.name} pasa de ${NOTE_FILE_MAX / 1024 / 1024} MB.`;
+
+function noteError(error: unknown, content?: string | File): string {
+  if (error instanceof ApiError && error.status === 413 && content instanceof File) return tooLarge(content);
+  if (error instanceof ApiError && error.status === 404) return "La tarjeta ya no existe.";
+  console.error(error);
+  return content instanceof File ? `No se pudo subir ${content.name}.` : "No se pudo guardar la nota.";
+}
+
 const UNDO_MS = 6000;
 const NOTICE_MS = 4000;
 
@@ -65,10 +77,36 @@ export function useBoard() {
   const timers = useRef(new Map<number, number>());
   const closers = useRef(new Map<number, () => void>());
 
+  const watchers = useRef(new Set<() => void>());
+
   const change = (next: (s: State) => State) => {
     live.current = next(live.current);
     setState(live.current);
+    for (const watch of watchers.current) watch();
   };
+
+  /** Resolves once the server holds the card: its create, if any, has settled or failed. */
+  function created(id: string): Promise<void> {
+    return new Promise((resolve) => {
+      const watch = () => {
+        if (live.current.pending.some((p) => p.op.kind === "create" && p.op.card.id === id)) return;
+        watchers.current.delete(watch);
+        resolve();
+      };
+      watchers.current.add(watch);
+      watch();
+    });
+  }
+
+  /** A note's add or delete changes the count the card face shows; no write carries it. */
+  function countNotes(id: string, delta: number) {
+    change((s) => ({
+      ...s,
+      base: s.base.map((card) =>
+        card.id === id ? { ...card, noteCount: Math.max(0, card.noteCount + delta) } : card,
+      ),
+    }));
+  }
 
   useEffect(() => {
     api.board().then(
@@ -185,7 +223,7 @@ export function useBoard() {
     olderWeek: state.olderWeek,
     toasts: state.toasts,
     closeToast: (id: number) => closeToast(id, "user"),
-    notify: (text: string) => toast(text, { ms: NOTICE_MS }),
+    notify: (text: string, action?: Toast["action"]) => toast(text, { ms: NOTICE_MS, action }),
 
     add(title: string, to: Container): string {
       const card: Card = {
@@ -199,6 +237,7 @@ export function useBoard() {
         list: to.list,
         position: 0,
         doneDate: to.list === "hecho" ? to.doneDate : null,
+        noteCount: 0,
       };
       enqueue({ kind: "create", card });
       return card.id;
@@ -275,6 +314,59 @@ export function useBoard() {
           },
         },
       });
+    },
+
+    /**
+     * Adds text or a file to the card's notes, once the card exists on the
+     * server. Notes are written at once, not queued: a note is not undone.
+     */
+    async addNote(cardId: string, input: string | File): Promise<NoteResult> {
+      // Pasted text too long for a note is kept whole, as a text file.
+      const content =
+        typeof input === "string" && input.length > NOTE_TEXT_MAX
+          ? new File([input], "texto.txt", { type: "text/plain" })
+          : input;
+      if (content instanceof File && content.size > NOTE_FILE_MAX) return { error: tooLarge(content) };
+      await created(cardId);
+      try {
+        const note =
+          typeof content === "string"
+            ? await api.addNote(cardId, content)
+            : await api.uploadNote(cardId, content);
+        countNotes(cardId, 1);
+        return { note };
+      } catch (error) {
+        return { error: noteError(error, content) };
+      }
+    },
+
+    /** The card's notes, oldest first, or null when they could not be read. */
+    async notes(cardId: string): Promise<Note[] | null> {
+      await created(cardId);
+      try {
+        return await api.notes(cardId);
+      } catch (error) {
+        console.error(error);
+        return null;
+      }
+    },
+
+    async updateNote(note: Note, text: string): Promise<NoteResult> {
+      try {
+        return { note: await api.updateNote(note.id, text) };
+      } catch (error) {
+        return { error: noteError(error) };
+      }
+    },
+
+    async removeNote(note: Note): Promise<{ error: string } | null> {
+      try {
+        await api.removeNote(note.id);
+      } catch (error) {
+        if (!(error instanceof ApiError && error.status === 404)) return { error: noteError(error) };
+      }
+      countNotes(note.cardId, -1);
+      return null;
     },
 
     /**

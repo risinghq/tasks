@@ -14,11 +14,13 @@ import {
 } from "../../shared/schemas";
 import { cardsOf } from "../cards";
 import { connect } from "../db/client";
+import { cardPrefix, deletePrefix, workspacePrefix } from "../files";
 import { labelsOf } from "../labels";
 import { requireOwner, requireSession, requireWorkspace, type AppEnv } from "../session";
 import { findUser, renameUser } from "../users";
 import { createWorkspace, deleteWorkspace, listMembers, renameWorkspace, workspacesOf } from "../workspaces";
 import { members } from "./members";
+import { fileRoutes, noteRoutes } from "./notes";
 import { reportLinkRoutes } from "./report-links";
 import { tokens } from "./tokens";
 
@@ -48,8 +50,11 @@ api.post("/workspaces", zValidator("json", createWorkspaceSchema), async (c) => 
   return c.json(workspace, 201);
 });
 
+api.route("/files", fileRoutes);
+
 // Everything below acts on one workspace: the `X-Workspace` header, or the user's personal one.
 api.use(requireWorkspace);
+api.route("/", noteRoutes);
 api.route("/members", members);
 api.route("/tokens", tokens);
 api.route("/report-links", reportLinkRoutes);
@@ -116,8 +121,11 @@ api.post("/cards/:id/move", zValidator("json", moveCardSchema), async (c) => {
 });
 
 api.delete("/cards/:id", async (c) => {
-  const deleted = await cardsOf(connect(c.env), c.get("workspace").id).delete(c.req.param("id"));
-  return deleted ? c.body(null, 204) : c.json({ error: "not found" }, 404);
+  const workspaceId = c.get("workspace").id;
+  const deleted = await cardsOf(connect(c.env), workspaceId).delete(c.req.param("id"));
+  if (!deleted) return c.json({ error: "not found" }, 404);
+  await deletePrefix(c.env.FILES, cardPrefix(workspaceId, c.req.param("id")));
+  return c.body(null, 204);
 });
 
 api.post("/labels", zValidator("json", createLabelSchema), async (c) => {
@@ -157,5 +165,6 @@ api.delete("/workspace", requireOwner, async (c) => {
   const { id } = c.get("workspace");
   if (await findUser(db, id)) return c.json({ error: "a personal workspace cannot be deleted" }, 409);
   await deleteWorkspace(db, id);
+  await deletePrefix(c.env.FILES, workspacePrefix(id));
   return c.body(null, 204);
 });

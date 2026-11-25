@@ -1,6 +1,6 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { AlignLeft, Check, Pencil } from "lucide-react";
+import { AlignLeft, Check, Pencil, StickyNote } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 import { labelStyle, type Card } from "../shared/model";
 import styles from "./CardView.module.css";
@@ -61,7 +61,7 @@ export function CardFace({
   const total = card.checklist.length;
   const checked = card.checklist.filter((item) => item.done).length;
   const hasDescription = card.description.trim() !== "";
-  const hasMeta = label || card.requester || total > 0 || hasDescription || assignee;
+  const hasMeta = label || card.requester || total > 0 || hasDescription || card.noteCount > 0 || assignee;
   const done = card.list === "hecho";
 
   return (
@@ -104,6 +104,17 @@ export function CardFace({
                 <AlignLeft size={14} aria-label="Tiene descripción" />
               </span>
             )}
+            {card.noteCount > 0 && (
+              <span
+                className={styles.metaItem}
+                data-faint
+                role="img"
+                aria-label={card.noteCount === 1 ? "1 nota" : `${card.noteCount} notas`}
+              >
+                <StickyNote size={14} aria-hidden />
+                {card.noteCount}
+              </span>
+            )}
           </div>
           {assignee && (
             <span
@@ -133,6 +144,7 @@ export function SortableCard({ card }: { card: Card }) {
       className={styles.sortable}
       data-card-id={card.id}
       data-dragging={isDragging}
+      data-file-over={ui.fileOver === card.id}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       {...attributes}
       role="group"

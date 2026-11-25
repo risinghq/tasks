@@ -35,6 +35,12 @@
   }
 }
 
+.sortable[data-file-over="true"] .face {
+  box-shadow:
+    0 0 0 2px var(--focus),
+    var(--shadow-raised-hover);
+}
+
 /* The card that follows the pointer. */
 .face[data-lifted="true"] {
   transform: rotate(4deg);

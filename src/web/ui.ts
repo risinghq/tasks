@@ -12,6 +12,8 @@ export type Ui = {
   toggleDone: (id: string) => void;
   /** The composer that is open, by container id. Only one is open at a time. */
   composer: string | null;
+  /** The card that dragged files hover, which takes them as notes on drop. */
+  fileOver: string | null;
   setComposer: (id: string | null) => void;
   addCard: (container: string, title: string) => void;
   /** The user's labels, by name. */

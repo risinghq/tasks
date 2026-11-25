@@ -9,6 +9,7 @@ import { FilterPopover } from "./FilterPopover";
 import { inContainer, parseContainerId } from "./groups";
 import { DoneColumn, FlatColumn } from "./ListColumn";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
+import { noteContent } from "./noteInput";
 import { QuickEdit } from "./QuickEdit";
 import { SettingsDialog } from "./SettingsDialog";
 import { ShareDialog } from "./ShareDialog";
@@ -18,7 +19,9 @@ import { UiContext, type Ui } from "./ui";
 import { UserMenu } from "./UserMenu";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { useBoard } from "./useBoard";
+import { useCardFileDrop } from "./useCardFileDrop";
 import { useCardRoute } from "./useCardRoute";
+import type { NoteActions } from "./useNotes";
 import { dragAnnouncements, useCardDrag } from "./useCardDrag";
 import { criteria as countCriteria, matches, useFilter } from "./useFilter";
 import { useOpenDays } from "./useOpenDays";
@@ -77,12 +80,39 @@ export function Board() {
     );
   };
 
+  // The card opened with `a`: its back opens with the note box focused.
+  const [noteFocus, setNoteFocus] = useState<string | null>(null);
+  const takeNote = (id: string) => {
+    setNoteFocus(id);
+    route.open(id);
+  };
+  const noteActions: NoteActions = {
+    list: board.notes,
+    add: board.addNote,
+    update: board.updateNote,
+    remove: board.removeNote,
+  };
+
+  /** Adds pasted or dropped pieces to a card from the board, where the toasts show. */
+  const noteOnCard = async (id: string, contents: (string | File)[]) => {
+    if (!contents.length) return;
+    const results = await Promise.all(contents.map((content) => board.addNote(id, content)));
+    const errors = results.flatMap((result) => ("error" in result ? [result.error] : []));
+    const saved = results.length - errors.length;
+    const open = { label: "Ver", run: () => route.open(id) };
+    const [error] = errors;
+    if (error) board.notify(error, saved ? open : undefined);
+    else board.notify(saved === 1 ? "Nota añadida." : `${saved} notas añadidas.`, open);
+  };
+  const fileDrop = useCardFileDrop((id, files) => void noteOnCard(id, files));
+
   const ui: Ui = {
     today: board.today,
     openCard: route.open,
     quickEdit,
     toggleDone,
     composer,
+    fileOver: fileDrop.over,
     setComposer,
     addCard,
     labels: board.labels,
@@ -128,6 +158,8 @@ export function Board() {
   const pointer = useShortcuts(modalOpen, {
     composer: setComposer,
     quickEdit,
+    note: takeNote,
+    paste: (id, data) => void noteOnCard(id, noteContent(data)),
     filter: () => openFilter(),
     clearFilter,
     help: () => setHelpOpen(true),
@@ -142,7 +174,7 @@ export function Board() {
 
   return (
     <UiContext.Provider value={ui}>
-      <div className={styles.page} {...pointer}>
+      <div className={styles.page} {...pointer} {...fileDrop.props}>
         <header className={styles.header}>
           <div className={styles.left}>
             <h1 className={styles.title}>
@@ -266,7 +298,12 @@ export function Board() {
             remove: () => board.remove(openCard.id),
             toggleDone: () => toggleDone(openCard.id),
           }}
-          onClose={route.close}
+          noteActions={noteActions}
+          focusNotes={noteFocus === openCard.id}
+          onClose={() => {
+            setNoteFocus(null);
+            route.close();
+          }}
         />
       )}
 

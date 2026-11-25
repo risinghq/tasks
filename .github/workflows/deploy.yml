@@ -36,6 +36,11 @@ jobs:
       - run: bun run db:migrate:remote
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      # Notes store their files in this bucket. Deploy fails while it is missing.
+      - name: Create the files bucket
+        run: bunx wrangler r2 bucket info tasks-files || bunx wrangler r2 bucket create tasks-files
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       - run: bun run deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
