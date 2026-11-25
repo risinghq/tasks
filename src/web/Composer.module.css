@@ -14,6 +14,10 @@
   transition: background-color var(--duration-fast) var(--ease-out);
 }
 
+.button[data-hidden="true"] {
+  visibility: hidden;
+}
+
 .button:active {
   background: var(--pressed);
 }

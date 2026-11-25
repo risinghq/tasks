@@ -1,5 +1,5 @@
 import { Check, ChevronDown, Ellipsis, Plus, X } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { dayHeading } from "../shared/dates";
 import { LIST_TITLES, TITLE_MAX, type Card } from "../shared/model";
 import type { Fields } from "./boardState";
@@ -146,6 +146,23 @@ function MoreMenu(props: { anchor: HTMLElement; cardId: string; onDelete: () => 
   );
 }
 
+/** Whether `target` has scrolled out of `root`, so the bar can carry the title. */
+function useScrolledPast(
+  root: RefObject<HTMLElement | null>,
+  target: RefObject<HTMLElement | null>,
+): boolean {
+  const [past, setPast] = useState(false);
+  useEffect(() => {
+    if (!root.current || !target.current) return;
+    const observer = new IntersectionObserver(([entry]) => setPast(!entry!.isIntersecting), {
+      root: root.current,
+    });
+    observer.observe(target.current);
+    return () => observer.disconnect();
+  }, [root, target]);
+  return past;
+}
+
 type PickerKind = "lista" | "etiqueta" | "responsable" | "solicitante" | "fecha";
 
 const PICKER_LABEL: Record<PickerKind, string> = {
@@ -177,6 +194,9 @@ export function CardBack(props: {
   const [picker, setPicker] = useState<{ kind: PickerKind; anchor: HTMLElement } | null>(null);
   const [menu, setMenu] = useState<HTMLElement | null>(null);
   const [checklistShown, setChecklistShown] = useState(false);
+  const body = useRef<HTMLDivElement>(null);
+  const titleRow = useRef<HTMLDivElement>(null);
+  const titleHidden = useScrolledPast(body, titleRow);
 
   const toggle = (kind: PickerKind) => (event: { currentTarget: HTMLElement }) => {
     const anchor = event.currentTarget;
@@ -195,14 +215,25 @@ export function CardBack(props: {
       onClose={props.onClose}
       {...target.props}
     >
-      {target.over && (
+      {target.dragged > 0 && (
         <div className={styles.drop} aria-hidden>
-          Suelta para añadir a Notas
+          <div className={styles.dropBox}>
+            <span className={styles.dropTitle}>Suelta para añadir a Notas</span>
+            <span className={styles.dropHint}>
+              {target.dragged === 1
+                ? "Se guarda como nota nueva"
+                : `${target.dragged} archivos · cada uno se guarda como nota nueva`}
+            </span>
+          </div>
         </div>
       )}
-      <header className={styles.bar}>
+      <header className={styles.bar} data-scrolled={titleHidden}>
         <span className={styles.context}>
-          {props.workspace} · {LIST_TITLES[card.list]}
+          {titleHidden && <span className={styles.barTitle}>{card.title}</span>}
+          <span className={styles.barPlace}>
+            {titleHidden && " · "}
+            {props.workspace} · {LIST_TITLES[card.list]}
+          </span>
         </span>
         <button
           type="button"
@@ -224,8 +255,8 @@ export function CardBack(props: {
         </button>
       </header>
 
-      <div className={styles.body}>
-        <div className={styles.titleRow}>
+      <div className={styles.body} ref={body}>
+        <div className={styles.titleRow} ref={titleRow}>
           <DoneCircle done={card.list === "hecho"} onToggle={actions.toggleDone} />
           <Title card={card} onSave={(title) => edit({ title })} />
         </div>
@@ -278,7 +309,7 @@ export function CardBack(props: {
                 onClick={toggle("responsable")}
               >
                 {assignee && (
-                  <span className={styles.avatar} aria-hidden>
+                  <span className={styles.avatar} data-assignee aria-hidden>
                     {assignee.name[0]}
                   </span>
                 )}
@@ -333,7 +364,7 @@ export function CardBack(props: {
             <Plus size={16} aria-hidden /> Añadir checklist
           </button>
         )}
-        <Notes notes={notes} focus={props.focusNotes} />
+        <Notes notes={notes} focus={props.focusNotes} today={props.today} />
       </div>
 
       {menu && (

@@ -112,6 +112,7 @@ export function Board() {
     quickEdit,
     toggleDone,
     composer,
+    quickEditing: quick !== null,
     fileOver: fileDrop.over,
     setComposer,
     addCard,

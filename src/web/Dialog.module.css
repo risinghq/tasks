@@ -67,3 +67,37 @@
     color: var(--text);
   }
 }
+
+.grabber {
+  display: none;
+}
+
+@media (max-width: 47.99rem) {
+  .dialog[data-sheet="true"] {
+    width: 100vw;
+    max-width: none;
+    max-height: 88dvh;
+    margin: auto 0 0;
+    border-radius: var(--radius-overlay) var(--radius-overlay) 0 0;
+    animation: rise var(--duration-slow) var(--ease-out);
+  }
+
+  @keyframes rise {
+    from {
+      transform: translateY(100%);
+    }
+  }
+
+  .dialog[data-sheet="true"] .content {
+    padding: var(--space-2) var(--space-4) var(--space-8);
+  }
+
+  .dialog[data-sheet="true"] .grabber {
+    display: block;
+    width: 2.25rem;
+    height: 0.3125rem;
+    margin: 0 auto var(--space-2);
+    border-radius: var(--radius-full);
+    background: var(--line-strong);
+  }
+}

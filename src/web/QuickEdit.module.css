@@ -37,46 +37,72 @@
   outline: none;
 }
 
+.buttons {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
 .save {
   composes: primary from "./form.module.css";
-  margin-top: var(--space-2);
+  padding: 0 var(--space-4);
+}
+
+/* Cancelar sits on the scrim, so it takes the overlay surface to stay legible. */
+.cancel {
+  composes: secondary from "./form.module.css";
+  background: var(--overlay);
 }
 
 .menu {
   position: absolute;
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  padding: var(--space-1);
+  border-radius: var(--radius-lg);
+  background: var(--overlay);
 }
 
 .action {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
   width: 100%;
-  min-height: var(--control);
+  min-height: 2.125rem;
   padding: 0 var(--space-3);
   border: 0;
-  border-radius: var(--radius-md);
-  background: var(--overlay);
+  border-radius: var(--radius-sm);
+  background: transparent;
   color: var(--text);
-  font-weight: var(--weight-strong);
-  transition:
-    background-color var(--duration-fast) var(--ease-out),
-    transform var(--duration-fast) var(--ease-out);
+  font-weight: 500;
+  text-align: left;
+  transition: background-color var(--duration-fast) var(--ease-out);
 }
 
 .action[data-danger] {
-  margin-top: var(--space-2);
   color: var(--text-danger);
 }
 
-.action:active {
-  transform: scale(0.97);
+.action:active,
+.action[aria-expanded="true"] {
+  background: var(--hover);
+}
+
+.divider {
+  height: 1px;
+  margin: var(--space-1) var(--space-2);
+  border: 0;
+  background: var(--line);
 }
 
 @media (hover: hover) and (pointer: fine) {
   .action:hover {
-    background: var(--card-hover);
+    background: var(--hover);
+  }
+}
+
+@media (pointer: coarse) {
+  .action {
+    min-height: var(--control);
+    font-size: var(--text-base);
   }
 }

@@ -1,25 +1,25 @@
-import { ArrowRight, Clock, CreditCard, Tag, Trash2, User } from "lucide-react";
 import { useLayoutEffect, useRef, useState } from "react";
 import { TITLE_MAX, type Card } from "../shared/model";
 import { CardFace } from "./CardView";
 import { CardPopover, type CardActions, type PopoverKind } from "./CardPopover";
-import { placeBeside } from "./placeBeside";
+import { fitsBeside, placeBeside } from "./placeBeside";
 import styles from "./QuickEdit.module.css";
 import { useAutosize } from "./useAutosize";
 import { useEscape } from "./useEscape";
 
-const MENU_WIDTH = 176;
+const MENU_WIDTH = 216;
 
-const BUTTONS: { kind: PopoverKind; label: string; icon: typeof Tag }[] = [
-  { kind: "label", label: "Etiqueta", icon: Tag },
-  { kind: "requester", label: "Solicitante", icon: User },
-  { kind: "date", label: "Fecha", icon: Clock },
-  { kind: "move", label: "Mover", icon: ArrowRight },
+const BUTTONS: { kind: PopoverKind; label: string }[] = [
+  { kind: "label", label: "Etiqueta" },
+  { kind: "requester", label: "Solicitante" },
+  { kind: "date", label: "Fecha" },
+  { kind: "move", label: "Mover" },
 ];
 
 /**
  * Edits a card's title where it sits on the board, with the rest of the board
- * dimmed and the card's actions in a column beside it.
+ * dimmed and the card's actions in one menu beside it, or under it when the
+ * screen is narrow.
  */
 export function QuickEdit(props: {
   card: Card;
@@ -38,14 +38,17 @@ export function QuickEdit(props: {
   const field = useAutosize();
   const editor = useRef<HTMLDivElement>(null);
   const menu = useRef<HTMLDivElement>(null);
-  const [menuPlace, setMenuPlace] = useState<{ left: number; top: number } | null>(null);
+  const [menuPlace, setMenuPlace] = useState<{ left: number; top: number; width: number } | null>(null);
   useEscape(props.onClose);
 
   useLayoutEffect(() => {
     if (!editor.current || !menu.current) return;
-    const size = { width: menu.current.offsetWidth, height: menu.current.offsetHeight };
+    const viewport = { width: innerWidth, height: innerHeight };
+    // Under the card, the menu takes the card's width so it reads as part of it.
+    const width = fitsBeside(rect, MENU_WIDTH, viewport.width) ? MENU_WIDTH : rect.width;
+    const size = { width, height: menu.current.offsetHeight };
     const below = editor.current.getBoundingClientRect().bottom;
-    setMenuPlace(placeBeside(rect, below, size, { width: innerWidth, height: innerHeight }));
+    setMenuPlace({ ...placeBeside(rect, below, size, viewport), width });
   }, [rect]);
 
   function save() {
@@ -87,15 +90,21 @@ export function QuickEdit(props: {
             />
           }
         />
-        <button type="button" className={styles.save} onClick={save}>
-          Guardar
-        </button>
+        <div className={styles.buttons}>
+          <button type="button" className={styles.save} onClick={save}>
+            Guardar
+          </button>
+          <button type="button" className={styles.cancel} onClick={props.onClose}>
+            Cancelar
+          </button>
+        </div>
       </div>
 
       <div
         ref={menu}
         className={styles.menu}
-        style={{ ...menuPlace, width: MENU_WIDTH, visibility: menuPlace ? "visible" : "hidden" }}
+        data-elevation="overlay"
+        style={{ width: MENU_WIDTH, ...menuPlace, visibility: menuPlace ? "visible" : "hidden" }}
       >
         <button
           type="button"
@@ -105,20 +114,22 @@ export function QuickEdit(props: {
             props.onOpenCard();
           }}
         >
-          <CreditCard size={16} aria-hidden /> Abrir tarjeta
+          Abrir tarjeta
         </button>
-        {BUTTONS.map(({ kind, label, icon: Icon }) => (
+        {BUTTONS.map(({ kind, label }) => (
           <button
             key={kind}
             type="button"
             className={styles.action}
+            aria-expanded={popover?.kind === kind}
             onClick={(event) => toggle(kind, event.currentTarget)}
           >
-            <Icon size={16} aria-hidden /> {label}
+            {label}
           </button>
         ))}
+        <hr className={styles.divider} />
         <button type="button" className={styles.action} data-danger onClick={props.onDelete}>
-          <Trash2 size={16} aria-hidden /> Eliminar
+          Eliminar
         </button>
       </div>
 

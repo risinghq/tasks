@@ -1,4 +1,4 @@
-import { Check, Copy, ExternalLink, Layers } from "lucide-react";
+import { Check, Ellipsis, ExternalLink } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { Label, Person, ReportLink } from "../shared/model";
 import type { CreateReportLink } from "../shared/schemas";
@@ -8,27 +8,39 @@ import { Dialog } from "./Dialog";
 import form from "./form.module.css";
 import { Initial, Select, type Option } from "./Select";
 import styles from "./ShareDialog.module.css";
+import { Sheet } from "./Sheet";
 
 const urlOf = (link: ReportLink) => `${location.origin}/r/${link.token}`;
 
-/** Who a link is for, in the words the list shows. */
+/** Who a link is for, in the words the list shows. A phone row has room for the short reach. */
 function audienceOf(link: ReportLink, workspace: string) {
   if (link.label)
     return {
       mark: <LabelDot color={link.label.color} />,
       name: link.label.name,
-      reach: "Solo las tarjetas con esta etiqueta.",
+      reach: "Tarjetas con esta etiqueta",
+      short: "Tarjetas con esta etiqueta",
     };
   if (link.member)
     return {
-      mark: <Initial name={link.member.name} />,
+      mark: (
+        <span className={styles.memberMark} aria-hidden>
+          {link.member.name[0]}
+        </span>
+      ),
       name: link.member.name,
-      reach: "Solo las tarjetas asignadas a esta persona.",
+      reach: "Tarjetas de las que es responsable",
+      short: "Sus tarjetas",
     };
   return {
-    mark: <Layers size={14} className={styles.wholeMark} aria-hidden />,
+    mark: (
+      <span className={styles.spaceMark} aria-hidden>
+        {workspace[0]}
+      </span>
+    ),
     name: "Todo el espacio",
-    reach: `Todas las tarjetas de ${workspace}.`,
+    reach: `Todas las tarjetas de ${workspace}`,
+    short: "Todas las tarjetas",
   };
 }
 
@@ -47,10 +59,99 @@ function CopyButton({ value }: { value: string }) {
     setTimeout(() => setCopied(false), 2000);
   };
   return (
-    <button type="button" className={form.secondary} onClick={copy}>
-      {copied ? <Check size={16} aria-hidden /> : <Copy size={16} aria-hidden />}
+    <button type="button" className={styles.copy} data-copied={copied} onClick={copy}>
+      {copied && <Check size={16} aria-hidden />}
       {copied ? "Copiado" : "Copiar enlace"}
     </button>
+  );
+}
+
+/**
+ * The row's ··· menu. On a phone it also holds Abrir, which has no room in the
+ * row. Changing or deleting a link asks first, because the sent link stops working.
+ */
+function LinkMenu(props: {
+  anchor: HTMLElement;
+  name: string;
+  url: string;
+  owner: boolean;
+  deletable: boolean;
+  onRegenerate: () => Promise<void>;
+  onDelete: () => Promise<void>;
+  onClose: () => void;
+}) {
+  const [confirming, setConfirming] = useState<"regenerate" | "delete" | null>(null);
+
+  return (
+    <Sheet anchor={props.anchor} label={`Acciones: ${props.name}`} align="right" onClose={props.onClose}>
+      {confirming ? (
+        <div className={styles.confirm} role="alertdialog" aria-label={`Confirmar: ${props.name}`}>
+          <p>
+            {confirming === "regenerate"
+              ? "El enlace actual dejará de funcionar. Tendrás que enviar el nuevo."
+              : "El enlace dejará de funcionar."}
+          </p>
+          <div className={form.confirmActions}>
+            <button
+              type="button"
+              className={form.destroy}
+              autoFocus
+              onClick={async () => {
+                await (confirming === "regenerate" ? props.onRegenerate() : props.onDelete());
+                props.onClose();
+              }}
+            >
+              {confirming === "regenerate" ? "Sí, cambiar" : "Sí, eliminar"}
+            </button>
+            <button type="button" className={form.secondary} onClick={() => setConfirming(null)}>
+              Cancelar
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className={styles.menu} role="menu" aria-label={`Acciones: ${props.name}`}>
+          <a
+            role="menuitem"
+            className={styles.menuItem}
+            data-narrow-only
+            href={props.url}
+            target="_blank"
+            rel="noreferrer"
+            onClick={props.onClose}
+          >
+            Abrir el informe
+          </a>
+          {props.owner && (
+            <>
+              <button
+                type="button"
+                role="menuitem"
+                className={styles.menuItem}
+                data-autofocus
+                onClick={() => setConfirming("regenerate")}
+              >
+                Cambiar enlace
+                <span className={styles.menuHint}>El enlace actual deja de funcionar.</span>
+              </button>
+              {props.deletable && (
+                <>
+                  <div className={styles.menuLine} role="separator" />
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={styles.menuItem}
+                    data-danger
+                    onClick={() => setConfirming("delete")}
+                  >
+                    Eliminar enlace
+                  </button>
+                </>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </Sheet>
   );
 }
 
@@ -62,67 +163,53 @@ function LinkRow(props: {
   onDelete: () => Promise<void>;
 }) {
   const { link } = props;
-  const [confirming, setConfirming] = useState<"regenerate" | "delete" | null>(null);
+  const [menu, setMenu] = useState<HTMLElement | null>(null);
   const audience = audienceOf(link, props.workspace);
-  const whole = !link.label && !link.member;
+  const url = urlOf(link);
 
   return (
     <li className={styles.link}>
-      <div className={styles.audience}>
-        <span className={styles.mark}>{audience.mark}</span>
-        <span className={styles.audienceText}>
-          <strong className={styles.audienceName}>{audience.name}</strong>
-          <span className={styles.reach}>{audience.reach}</span>
+      <span className={styles.mark}>{audience.mark}</span>
+      <span className={styles.audience}>
+        <span className={styles.name}>{audience.name}</span>
+        <span className={styles.reach}>
+          <span className={styles.reachLong}>{audience.reach}</span>
+          <span className={styles.reachShort}>{audience.short}</span>
         </span>
-      </div>
-      <div className={styles.actions}>
-        <CopyButton value={urlOf(link)} />
-        <a
-          className={form.ghost + " " + styles.open}
-          href={urlOf(link)}
-          target="_blank"
-          rel="noreferrer"
-          aria-label="Abrir"
-          title="Abrir el informe"
-        >
-          <ExternalLink size={16} aria-hidden />
-        </a>
-        {props.owner && !confirming && (
-          <span className={styles.manage}>
-            <button type="button" className={form.ghost} onClick={() => setConfirming("regenerate")}>
-              Cambiar enlace
-            </button>
-            {!whole && (
-              <button type="button" className={form.danger} onClick={() => setConfirming("delete")}>
-                Eliminar
-              </button>
-            )}
-          </span>
-        )}
-      </div>
-      {confirming && (
-        <div className={form.confirm} role="alertdialog" aria-label={`Confirmar: ${audience.name}`}>
-          <p>
-            {confirming === "regenerate"
-              ? "El enlace actual dejará de funcionar. Tendrás que enviar el nuevo."
-              : "El enlace dejará de funcionar."}
-          </p>
-          <div className={form.confirmActions}>
-            <button
-              type="button"
-              className={form.destroy}
-              onClick={async () => {
-                await (confirming === "regenerate" ? props.onRegenerate() : props.onDelete());
-                setConfirming(null);
-              }}
-            >
-              {confirming === "regenerate" ? "Sí, cambiar" : "Sí, eliminar"}
-            </button>
-            <button type="button" className={form.secondary} onClick={() => setConfirming(null)}>
-              Cancelar
-            </button>
-          </div>
-        </div>
+      </span>
+      <CopyButton value={url} />
+      <a
+        className={styles.open}
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        aria-label="Abrir"
+        title="Abrir el informe"
+      >
+        <ExternalLink size={16} aria-hidden />
+      </a>
+      <button
+        type="button"
+        className={styles.more}
+        data-owner={props.owner}
+        aria-label={`Más acciones: ${audience.name}`}
+        aria-haspopup="menu"
+        aria-expanded={Boolean(menu)}
+        onClick={(event) => setMenu(menu ? null : event.currentTarget)}
+      >
+        <Ellipsis size={16} aria-hidden />
+      </button>
+      {menu && (
+        <LinkMenu
+          anchor={menu}
+          name={audience.name}
+          url={url}
+          owner={props.owner}
+          deletable={Boolean(link.label || link.member)}
+          onRegenerate={props.onRegenerate}
+          onDelete={props.onDelete}
+          onClose={() => setMenu(null)}
+        />
       )}
     </li>
   );
@@ -193,9 +280,9 @@ export function ShareDialog(props: {
     });
 
   return (
-    <Dialog title="Compartir informe" onClose={props.onClose}>
+    <Dialog title="Compartir informe" sheet className={styles.dialog} onClose={props.onClose}>
       <p className={styles.intro}>
-        Cada enlace abre el informe semanal sin contraseña. Envía a cada cliente o responsable solo el suyo.
+        Cada enlace abre el informe semanal sin contraseña. Envía a cada cliente o persona solo el suyo.
       </p>
 
       <ul className={styles.links} aria-label="Enlaces del informe">
@@ -229,25 +316,27 @@ export function ShareDialog(props: {
           </h3>
           {free.length > 0 ? (
             <>
-              <Select
-                label="Para"
-                value={scope}
-                options={[{ id: "", name: "Elegir etiqueta o persona" }, ...free]}
-                onPick={setScope}
-              />
-              <p className={styles.reach}>
+              <div className={styles.createRow}>
+                <div className={styles.picker}>
+                  <Select
+                    label="Para"
+                    value={scope}
+                    options={[{ id: "", name: "Elegir etiqueta o persona" }, ...free]}
+                    onPick={setScope}
+                  />
+                </div>
+                <button type="button" className={styles.createButton} disabled={!chosen} onClick={create}>
+                  Crear enlace
+                </button>
+              </div>
+              <p className={styles.hint}>
                 {chosen
                   ? `Quien tenga este enlace ve solo las tarjetas de ${chosen.name}.`
                   : "Un enlace por cliente (etiqueta) o por persona del equipo."}
               </p>
-              <div className={form.actions}>
-                <button type="button" className={form.primary} disabled={!chosen} onClick={create}>
-                  Crear enlace
-                </button>
-              </div>
             </>
           ) : (
-            <p className={styles.reach}>
+            <p className={styles.hint}>
               {props.labels.length === 0
                 ? "Crea una etiqueta por cliente para compartir con cada uno solo su trabajo."
                 : "Cada etiqueta y persona ya tiene su enlace."}

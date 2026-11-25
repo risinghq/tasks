@@ -29,7 +29,12 @@ export function Composer({ container }: { container: string }) {
 
   if (!open) {
     return (
-      <button type="button" className={styles.button} onClick={() => ui.setComposer(container)}>
+      <button
+        type="button"
+        className={styles.button}
+        data-hidden={ui.quickEditing}
+        onClick={() => ui.setComposer(container)}
+      >
         <Plus size={16} aria-hidden />
         Añade una tarjeta
       </button>
