@@ -63,8 +63,8 @@ sign in with a cookie signed by `SESSION_SECRET` instead.
   Mover in a card changes its list there.
 - The settings dialog (Ajustes) changes your name and shows your report link,
   which it copies and regenerates. Regenerating invalidates the old link.
-- The report is at `/r/<token>` and shows your name and your cards.
-  `?semana=2026-W42` picks another week.
+- The report is at `/r/<token>` and shows what was done by day, what is in
+  progress and what is next. `?semana=2026-W42` picks another week.
 
 ### Add cards from a script
 

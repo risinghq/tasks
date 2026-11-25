@@ -27,6 +27,8 @@ e2e          Playwright tests that drive the app in Chromium
    picks the workspace (see Workspaces). `/api/members` (`routes/members.ts`)
    lists and edits the workspace's members, and changing them needs the owner
    role. `/api/tokens` (`routes/tokens.ts`) manages the user's API tokens.
+   `/api/report-links` (`routes/report-links.ts`) lists the shared report links,
+   and creating, regenerating or deleting one needs the owner role.
 4. `/r/<token>` (`routes/report.tsx`), public.
 5. `/assets/*`, `/fonts/*` and `/favicon.svg`, public static files.
 6. Everything else needs the session and returns the React app, including a
@@ -41,11 +43,10 @@ Each person has a row in `users`: id, email (unique, always lowercase), name and
 session version. Sign-up is open to any Google account with a verified email.
 There are no global admins.
 
-Cards, labels, API tokens and the report token belong to a workspace
-(`workspaces`), not to a user. `workspace_members` joins users to workspaces
-with the role `owner` or `member`. An owner renames or deletes the workspace,
-manages members and regenerates the report link. A member works on the cards and
-labels.
+Cards, labels, API tokens and report links belong to a workspace (`workspaces`),
+not to a user. `workspace_members` joins users to workspaces with the role
+`owner` or `member`. An owner renames or deletes the workspace, manages members
+and the report links. A member works on the cards and labels.
 
 A user's personal workspace has the user's own id and the name "Personal".
 Signing up for the first time creates both rows in one batch
@@ -224,23 +225,29 @@ that would leave no other owner is 409; the guard is part of the same statement,
 so two owners cannot remove each other together. Removing a member deletes their
 API tokens for that workspace.
 
-### Report token
+### Report links
 
-`workspaces.report_token` holds one token of 32 random bytes per workspace. The
-column has a random default, so the token exists as soon as the row does and a
-read never writes. The migration moves the existing token to the first admin's
-personal workspace unchanged, so the link that exists keeps working.
+`report_links` holds one row per shared link: `workspace_id`, a `token` of 32
+random bytes (unique), a nullable `label_id`, and `created_at`. `label_id` is
+null for a whole-workspace link; a label carries at most one link (a unique
+index) and deleting the label deletes its link. `member_id` is reserved for a
+per-person scope and is unused so far.
 
-| State   | Entered by                                | Left by             |
-| ------- | ----------------------------------------- | ------------------- |
-| Current | The workspace's creation, or a regenerate | The next regenerate |
+The workspace's whole-workspace link is created on demand: `GET /api/workspace`
+returns its token as `reportToken`, and `POST /api/workspace/report-token`
+replaces it in one UPDATE, so the link the settings dialog shows keeps working
+and a regenerate kills it at once. `/api/report-links` lists every link with its
+scope, and creates, regenerates or deletes one; changes need the owner role.
 
-Members read the token and only owners regenerate it (`/api/workspace`). Anyone
-with the token reads that workspace's report: its name and its cards, never
-another workspace's. A personal workspace reports under its owner's name.
-Regenerating is one UPDATE, so the old link stops at once. Two tabs regenerating
-together leave one token in the row, the later write, and the other tab shows a
-link that no longer works until it reloads the settings.
+| State   | Entered by                           | Left by                       |
+| ------- | ------------------------------------ | ----------------------------- |
+| Current | The link's creation, or a regenerate | The next regenerate or delete |
+
+Anyone with a token reads that link's report: its scope and its cards, never
+another workspace's. A label link shows only that label's cards. A personal
+workspace reports under its owner's name. Two tabs regenerating together leave
+one token in the row, the later write, and the other tab shows a link that no
+longer works until it reloads the settings.
 
 The report sends `X-Robots-Tag: noindex, nofollow` and
 `Cache-Control: no-store`.

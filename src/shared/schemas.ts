@@ -56,6 +56,9 @@ export const apiListCardsSchema = z.object({
 
 export const createTokenSchema = z.object({ name: z.string().trim().min(1).max(80) });
 
+/** A report link for the whole workspace (`labelId` absent or null) or for one label. */
+export const createReportLinkSchema = z.object({ labelId: rowId.nullable().optional() });
+
 export const updateCardSchema = z.object({
   title: title.optional(),
   description: description.optional(),

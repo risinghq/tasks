@@ -88,6 +88,12 @@ export type Me = {
 /** What Ajustes shows about the current workspace. */
 export type WorkspaceSettings = Workspace & { reportToken: string };
 
+/**
+ * A shared read-only link to the weekly report. `label` is null for a
+ * whole-workspace link. `createdAt` is unix seconds.
+ */
+export type ReportLink = { id: string; token: string; label: Label | null; createdAt: number };
+
 export type Member = { id: string; name: string; email: string; role: WorkspaceRole };
 
 /** A personal API token as Ajustes lists it. Times are unix seconds. */

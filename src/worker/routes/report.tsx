@@ -1,12 +1,10 @@
 /** @jsxImportSource hono/jsx */
-import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { limaDate, parseWeek, weekDays, weekOf } from "../../shared/dates";
 import { cardsOf } from "../cards";
 import { connect } from "../db/client";
-import { workspaces } from "../db/schema";
 import { labelsOf } from "../labels";
-import { workspaceByReportToken } from "../workspaces";
+import { reportLinkByToken, workspaceForReport } from "../report-links";
 import { ReportPage } from "../views/report";
 
 export const report = new Hono<{ Bindings: Env }>();
@@ -20,9 +18,14 @@ report.use(async (c, next) => {
 
 report.get("/:token", async (c) => {
   const db = connect(c.env);
-  const workspace = await workspaceByReportToken(db, c.req.param("token"));
+  const link = await reportLinkByToken(db, c.req.param("token"));
+  if (!link) return c.text("No encontrado", 404);
+  const workspace = await workspaceForReport(db, link.workspaceId);
   if (!workspace) return c.text("No encontrado", 404);
-  const cards = cardsOf(db, workspace.id);
+
+  const cards = cardsOf(db, link.workspaceId, link.labelId ?? undefined);
+  const labels = await labelsOf(db, link.workspaceId).list();
+  const label = labels.find((l) => l.id === link.labelId);
 
   const today = limaDate(new Date());
   const currentWeek = weekOf(today);
@@ -30,14 +33,10 @@ report.get("/:token", async (c) => {
 
   const done = await cards.doneInWeek(week);
   const days = weekDays(week)
+    .toReversed()
     .map((date) => ({ date, cards: done.filter((card) => card.doneDate === date) }))
     .filter((day) => day.cards.length > 0);
   const open = week === currentWeek ? await cards.pendingAndActive() : null;
-  // workspaceByReportToken names a personal workspace after its owner; the
-  // report header shows the workspace's own name.
-  const name =
-    (await db.select({ name: workspaces.name }).from(workspaces).where(eq(workspaces.id, workspace.id)).get())
-      ?.name ?? workspace.name;
   const url = new URL(c.req.url);
 
   return c.html(
@@ -45,12 +44,14 @@ report.get("/:token", async (c) => {
       token={c.req.param("token")}
       week={week}
       currentWeek={currentWeek}
-      workspaceName={name}
+      scopeName={label?.name ?? workspace.name}
+      ownerName={workspace.ownerName}
+      wholeWorkspace={!link.labelId}
       today={today}
       url={url.host + url.pathname + url.search}
       days={days}
       open={open}
-      labels={await labelsOf(db, workspace.id).list()}
+      labels={labels}
     />,
   );
 });

@@ -43,6 +43,13 @@
       "when": 1795600000000,
       "tag": "0005_workspaces",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1795563041390,
+      "tag": "0006_odd_mephistopheles",
+      "breakpoints": true
     }
   ]
 }

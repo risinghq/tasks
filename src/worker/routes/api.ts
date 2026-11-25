@@ -15,17 +15,12 @@ import {
 import { cardsOf } from "../cards";
 import { connect } from "../db/client";
 import { labelsOf } from "../labels";
+import { regenerateReportToken, reportTokenOf } from "../report-links";
 import { requireOwner, requireSession, requireWorkspace, type AppEnv } from "../session";
 import { findUser, renameUser } from "../users";
-import {
-  createWorkspace,
-  deleteWorkspace,
-  regenerateReportToken,
-  renameWorkspace,
-  reportTokenOf,
-  workspacesOf,
-} from "../workspaces";
+import { createWorkspace, deleteWorkspace, renameWorkspace, workspacesOf } from "../workspaces";
 import { members } from "./members";
+import { reportLinkRoutes } from "./report-links";
 import { tokens } from "./tokens";
 
 export const api = new Hono<AppEnv>();
@@ -58,6 +53,7 @@ api.post("/workspaces", zValidator("json", createWorkspaceSchema), async (c) => 
 api.use(requireWorkspace);
 api.route("/members", members);
 api.route("/tokens", tokens);
+api.route("/report-links", reportLinkRoutes);
 
 const today = () => limaDate(new Date());
 

@@ -79,10 +79,11 @@ const renumber = (workspaceId: string, p: Placement): SQL => sql`
 /**
  * Every read and write of cards, for one workspace. The id comes from
  * `requireWorkspace`, and every statement here names it, so a route cannot reach
- * another workspace's cards.
+ * another workspace's cards. A `labelId` further scopes every read and write to
+ * the cards of one label: the report uses it for a label-scoped link.
  */
-export function cardsOf(db: Db, workspaceId: string) {
-  const mine = eq(cards.workspaceId, workspaceId);
+export function cardsOf(db: Db, workspaceId: string, labelId?: string) {
+  const mine = and(eq(cards.workspaceId, workspaceId), labelId ? eq(cards.labelId, labelId) : undefined);
 
   const get = async (id: string): Promise<Card | undefined> =>
     db
@@ -91,11 +92,11 @@ export function cardsOf(db: Db, workspaceId: string) {
       .where(and(eq(cards.id, id), mine))
       .get();
 
-  const assertOwnLabel = async (labelId: string): Promise<void> => {
+  const assertOwnLabel = async (wanted: string): Promise<void> => {
     const label = await db
       .select({ id: labels.id })
       .from(labels)
-      .where(and(eq(labels.id, labelId), eq(labels.workspaceId, workspaceId)))
+      .where(and(eq(labels.id, wanted), eq(labels.workspaceId, workspaceId)))
       .get();
     if (!label) throw new InvalidCard("unknown label");
   };

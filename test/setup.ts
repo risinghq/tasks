@@ -12,6 +12,7 @@ beforeEach(async () => {
   vi.setSystemTime(new Date("2026-10-16T17:00:00Z"));
   await env.DB.batch([
     env.DB.prepare("DELETE FROM api_tokens"),
+    env.DB.prepare("DELETE FROM report_links"),
     env.DB.prepare("DELETE FROM cards"),
     env.DB.prepare("DELETE FROM labels"),
     env.DB.prepare("DELETE FROM login_attempts"),

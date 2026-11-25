@@ -22,14 +22,10 @@ export const users = sqliteTable(
   (table) => [check("email_lowercase", sql`${table.email} = lower(${table.email})`)],
 );
 
-/** A board. Cards, labels and the report link belong to a workspace. */
+/** A board. Cards, labels and report links belong to a workspace. */
 export const workspaces = sqliteTable("workspaces", {
   id: text().primaryKey(),
   name: text().notNull(),
-  reportToken: text("report_token")
-    .notNull()
-    .unique()
-    .default(sql`(lower(hex(randomblob(32))))`),
   /** Unix seconds. */
   createdAt: integer("created_at").notNull(),
 });
@@ -87,6 +83,34 @@ export const cards = sqliteTable(
   (table) => [
     index("cards_group").on(table.workspaceId, table.list, table.doneDate, table.position),
     check("done_date_iff_hecho", sql`(${table.list} = 'hecho') = (${table.doneDate} is not null)`),
+  ],
+);
+
+/**
+ * One shared read-only link to the weekly report. `label_id` limits the report
+ * to the cards of one label; null shows the whole workspace. `member_id` is
+ * reserved for a per-person scope and is not used yet.
+ */
+export const reportLinks = sqliteTable(
+  "report_links",
+  {
+    id: text().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    token: text()
+      .notNull()
+      .unique()
+      .default(sql`(lower(hex(randomblob(32))))`),
+    labelId: text("label_id").references(() => labels.id, { onDelete: "cascade" }),
+    memberId: text("member_id").references(() => users.id, { onDelete: "cascade" }),
+    /** Unix seconds. */
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    index("report_links_workspace").on(table.workspaceId),
+    /** At most one link per label. Nulls do not conflict. */
+    unique("report_links_label").on(table.labelId),
   ],
 );
 
