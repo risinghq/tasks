@@ -77,12 +77,18 @@ function LinkRow(props: {
       </div>
       <div className={styles.actions}>
         <CopyButton value={urlOf(link)} />
-        <a className={form.ghost + " " + styles.open} href={urlOf(link)} target="_blank" rel="noreferrer">
-          <ExternalLink size={16} aria-hidden /> Abrir
+        <a
+          className={form.ghost + " " + styles.open}
+          href={urlOf(link)}
+          target="_blank"
+          rel="noreferrer"
+          aria-label="Abrir"
+          title="Abrir el informe"
+        >
+          <ExternalLink size={16} aria-hidden />
         </a>
         {props.owner && !confirming && (
-          <>
-            <span className={form.spacer} />
+          <span className={styles.manage}>
             <button type="button" className={form.ghost} onClick={() => setConfirming("regenerate")}>
               Cambiar enlace
             </button>
@@ -91,7 +97,7 @@ function LinkRow(props: {
                 Eliminar
               </button>
             )}
-          </>
+          </span>
         )}
       </div>
       {confirming && (
