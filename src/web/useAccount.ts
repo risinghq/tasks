@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import type { Me, WorkspaceSettings } from "../shared/model";
+import type { Me, Workspace } from "../shared/model";
 import { api } from "./api";
 import { chooseWorkspace } from "./workspace";
 
 /** The signed-in user and the workspace the board shows. */
 export function useAccount() {
   const [me, setMe] = useState<Me | null>(null);
-  const [workspace, setWorkspace] = useState<WorkspaceSettings | null>(null);
+  const [workspace, setWorkspace] = useState<Workspace | null>(null);
 
   useEffect(() => {
     api.me().then(setMe, console.error);
@@ -20,7 +20,7 @@ export function useAccount() {
   };
 
   /** A rename shows in the workspace list of the menu as well. */
-  const renameWorkspace = (next: WorkspaceSettings) => {
+  const renameWorkspace = (next: Workspace) => {
     setWorkspace(next);
     setMe(
       (current) =>

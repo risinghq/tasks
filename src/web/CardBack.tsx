@@ -8,7 +8,7 @@ import { LabelDot } from "./CardView";
 import { useModal } from "./Dialog";
 import { Description } from "./Description";
 import { LabelPicker } from "./LabelPicker";
-import { DatePicker, ListPicker, RequesterPicker } from "./Pickers";
+import { AssigneePicker, DatePicker, ListPicker, RequesterPicker } from "./Pickers";
 import { Sheet } from "./Sheet";
 import styles from "./CardBack.module.css";
 import type { Container } from "./groups";
@@ -144,11 +144,12 @@ function MoreMenu(props: { anchor: HTMLElement; cardId: string; onDelete: () => 
   );
 }
 
-type PickerKind = "lista" | "etiqueta" | "solicitante" | "fecha";
+type PickerKind = "lista" | "etiqueta" | "responsable" | "solicitante" | "fecha";
 
 const PICKER_LABEL: Record<PickerKind, string> = {
   lista: "Lista",
   etiqueta: "Etiqueta",
+  responsable: "Responsable",
   solicitante: "Solicitante",
   fecha: "Fecha de término",
 };
@@ -162,8 +163,9 @@ export function CardBack(props: {
   onClose: () => void;
 }) {
   const { card, actions } = props;
-  const { labels } = useUi();
+  const { labels, members } = useUi();
   const chosen = labels.find((known) => known.id === card.labelId);
+  const assignee = members.find((member) => member.id === card.assigneeId);
   const modal = useModal();
   const [picker, setPicker] = useState<{ kind: PickerKind; anchor: HTMLElement } | null>(null);
   const [menu, setMenu] = useState<HTMLElement | null>(null);
@@ -245,6 +247,28 @@ export function CardBack(props: {
               <span className={styles.valueText}>Añadir etiqueta</span>
             )}
           </button>
+          {members.length > 1 && (
+            <>
+              <span className={styles.prop} id="prop-responsable">
+                Responsable
+              </span>
+              <button
+                type="button"
+                className={styles.value}
+                aria-labelledby="prop-responsable"
+                aria-haspopup="dialog"
+                data-empty={!assignee}
+                onClick={toggle("responsable")}
+              >
+                {assignee && (
+                  <span className={styles.avatar} aria-hidden>
+                    {assignee.name[0]}
+                  </span>
+                )}
+                <span className={styles.valueText}>{assignee?.name ?? "Asignar"}</span>
+              </button>
+            </>
+          )}
           <span className={styles.prop} id="prop-solicitante">
             Solicitante
           </span>
@@ -323,6 +347,16 @@ export function CardBack(props: {
                 value={card.labelId}
                 onPick={(labelId) => {
                   if (labelId !== card.labelId) edit({ labelId });
+                  setPicker(null);
+                }}
+              />
+            )}
+            {picker.kind === "responsable" && (
+              <AssigneePicker
+                value={card.assigneeId}
+                members={members}
+                onPick={(assigneeId) => {
+                  if (assigneeId !== card.assigneeId) edit({ assigneeId });
                   setPicker(null);
                 }}
               />

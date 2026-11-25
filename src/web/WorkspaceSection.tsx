@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { WORKSPACE_NAME_MAX, type Me, type WorkspaceSettings } from "../shared/model";
+import { WORKSPACE_NAME_MAX, type Me, type Workspace } from "../shared/model";
 import { api } from "./api";
 import form from "./form.module.css";
 import styles from "./SettingsDialog.module.css";
@@ -7,8 +7,8 @@ import { chooseWorkspace } from "./workspace";
 
 export function WorkspaceSection(props: {
   me: Me;
-  workspace: WorkspaceSettings;
-  onChange: (workspace: WorkspaceSettings) => void;
+  workspace: Workspace;
+  onChange: (workspace: Workspace) => void;
 }) {
   const { workspace } = props;
   const personal = workspace.id === props.me.id;

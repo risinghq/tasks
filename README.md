@@ -61,8 +61,13 @@ sign in with a cookie signed by `SESSION_SECRET` instead.
   and Salir. Tema is Sistema, Claro or Oscuro; Sistema follows the device.
 - On a screen narrower than 768px the lists become tabs, starting on En curso.
   Mover in a card changes its list there.
-- The settings dialog (Ajustes) changes your name and shows your report link,
-  which it copies and regenerates. Regenerating invalidates the old link.
+- Compartir informe, in the header or the workspace switcher, lists the report
+  links. Each link shows one audience: the whole workspace, one label (a
+  freelancer gives each client the label link for that client), or one member (a
+  company reads each employee's cards). Owners create, regenerate and delete
+  links. Regenerating invalidates the old link.
+- In a workspace with more than one member, a card takes a Responsable, shown on
+  the card, and the filter narrows the board by Responsable.
 - The report is at `/r/<token>` and shows what was done by day, what is in
   progress and what is next. `?semana=2026-W42` picks another week.
 
@@ -105,7 +110,7 @@ that address 429 with `Retry-After` for 15 minutes. A valid token still works.
 
 Anyone with a Google account signs up and gets a personal workspace. The user
 menu lists their workspaces. "Espacio nuevo" makes another, for a company or a
-project, with its own board, labels, members, tokens and report link.
+project, with its own board, labels, members, tokens and report links.
 
 Owners see a Miembros section in Ajustes.
 

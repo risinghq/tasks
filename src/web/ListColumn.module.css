@@ -1,8 +1,9 @@
 .column {
   display: flex;
   flex-direction: column;
-  flex: 0 0 var(--list-width);
-  width: var(--list-width);
+  /* The four lists shrink together rather than scroll the board sideways on a tablet. */
+  flex: 0 1 var(--list-width);
+  min-width: 0;
   max-height: 100%;
   border-radius: var(--radius-list);
   background: var(--list);

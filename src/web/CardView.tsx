@@ -64,12 +64,13 @@ export function CardFace({
   lifted?: boolean;
   onToggleDone?: () => void;
 }) {
-  const { labels } = useUi();
+  const { labels, members } = useUi();
   const label = labels.find((known) => known.id === card.labelId);
+  const assignee = members.length > 1 ? members.find((member) => member.id === card.assigneeId) : undefined;
   const total = card.checklist.length;
   const checked = card.checklist.filter((item) => item.done).length;
   const hasDescription = card.description.trim() !== "";
-  const hasMeta = label || card.requester || total > 0 || hasDescription;
+  const hasMeta = label || card.requester || total > 0 || hasDescription || assignee;
   const done = card.list === "hecho";
 
   return (
@@ -109,6 +110,16 @@ export function CardFace({
           {hasDescription && (
             <span className={styles.metaItem} data-faint>
               <AlignLeft size={14} aria-label="Tiene descripción" />
+            </span>
+          )}
+          {assignee && (
+            <span
+              className={styles.assignee}
+              title={`Responsable: ${assignee.name}`}
+              role="img"
+              aria-label={`Responsable: ${assignee.name}`}
+            >
+              {assignee.name[0]}
             </span>
           )}
         </div>

@@ -1,5 +1,5 @@
 import { DndContext, DragOverlay } from "@dnd-kit/core";
-import { ChartLine, Filter as FilterIcon } from "lucide-react";
+import { Filter as FilterIcon, Share } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { LISTS, LIST_TITLES, type ListId } from "../shared/model";
 import styles from "./Board.module.css";
@@ -11,6 +11,7 @@ import { DoneColumn, FlatColumn } from "./ListColumn";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { QuickEdit } from "./QuickEdit";
 import { SettingsDialog } from "./SettingsDialog";
+import { ShareDialog } from "./ShareDialog";
 import { ShortcutsDialog } from "./ShortcutsDialog";
 import { Toasts } from "./Toasts";
 import { UiContext, type Ui } from "./ui";
@@ -19,7 +20,7 @@ import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { useBoard } from "./useBoard";
 import { useCardRoute } from "./useCardRoute";
 import { dragAnnouncements, useCardDrag } from "./useCardDrag";
-import { matches, useFilter } from "./useFilter";
+import { criteria as countCriteria, matches, useFilter } from "./useFilter";
 import { useOpenDays } from "./useOpenDays";
 import { useAccount } from "./useAccount";
 import { useShortcuts } from "./useShortcuts";
@@ -36,6 +37,7 @@ export function Board() {
   const [quick, setQuick] = useState<{ id: string; rect: DOMRect } | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [newWorkspaceOpen, setNewWorkspaceOpen] = useState(false);
   const { me, setMe, workspace, renameWorkspace, switchWorkspace, shownName } = useAccount();
@@ -84,6 +86,7 @@ export function Board() {
     setComposer,
     addCard,
     labels: board.labels,
+    members: board.members,
     createLabel: board.createLabel,
     updateLabel: board.updateLabel,
     removeLabel: board.removeLabel,
@@ -115,7 +118,13 @@ export function Board() {
   };
 
   const modalOpen =
-    Boolean(route.id) || quick !== null || settingsOpen || newWorkspaceOpen || helpOpen || filterOpen;
+    Boolean(route.id) ||
+    quick !== null ||
+    settingsOpen ||
+    shareOpen ||
+    newWorkspaceOpen ||
+    helpOpen ||
+    filterOpen;
   const pointer = useShortcuts(modalOpen, {
     composer: setComposer,
     quickEdit,
@@ -126,10 +135,9 @@ export function Board() {
 
   const dragged = drag.dragging && drag.cards.find((card) => card.id === drag.dragging?.id);
   const shared = { cards: drag.cards, dragging: drag.dragging !== null, filtering, current: tab };
-  const criteria = [filter.q, filter.label, filter.requester].filter(Boolean).length;
+  const criteria = countCriteria(filter);
   const workspaceName =
     me?.workspaces.find((w) => w.id === workspace?.id)?.name ?? workspace?.name ?? "Espacio";
-  const reportUrl = workspace ? `/r/${workspace.reportToken}` : null;
   const openCount = board.cards.filter((card) => card.list !== "hecho").length;
 
   return (
@@ -143,7 +151,7 @@ export function Board() {
                 currentId={workspace?.id ?? null}
                 name={workspaceName}
                 openCount={openCount}
-                reportUrl={reportUrl}
+                onShare={() => setShareOpen(true)}
                 onSwitch={switchWorkspace}
                 onNewWorkspace={() => setNewWorkspaceOpen(true)}
               />
@@ -163,11 +171,9 @@ export function Board() {
             </button>
           </div>
           <div className={styles.actions}>
-            {reportUrl && (
-              <a href={reportUrl} className={styles.report}>
-                <ChartLine size={16} aria-hidden /> Informe semanal
-              </a>
-            )}
+            <button type="button" className={styles.report} onClick={() => setShareOpen(true)}>
+              <Share size={16} aria-hidden /> Compartir informe
+            </button>
             <button
               ref={filterIcon}
               type="button"
@@ -290,6 +296,7 @@ export function Board() {
           filter={filter}
           matches={shown.length}
           labels={board.labels}
+          members={board.members}
           requesters={board.requesters}
           onChange={setFilter}
           onClear={clearFilter}
@@ -304,6 +311,15 @@ export function Board() {
           onMe={setMe}
           onWorkspace={renameWorkspace}
           onClose={() => setSettingsOpen(false)}
+        />
+      )}
+      {shareOpen && (
+        <ShareDialog
+          workspace={workspaceName}
+          owner={workspace?.role === "owner"}
+          labels={board.labels}
+          members={board.members}
+          onClose={() => setShareOpen(false)}
         />
       )}
       {newWorkspaceOpen && <NewWorkspaceDialog onClose={() => setNewWorkspaceOpen(false)} />}

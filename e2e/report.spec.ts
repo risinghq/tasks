@@ -1,4 +1,4 @@
-import type { ReportLink, WorkspaceSettings } from "../src/shared/model";
+import type { ReportLink } from "../src/shared/model";
 import { expect, test } from "./fixtures";
 
 const WORD = "supercalifragilisticoespialidosoyconstantinopolitanoestremaduro";
@@ -31,13 +31,12 @@ test.describe("the report never scrolls sideways", () => {
   for (const width of [320, 390, 1440]) {
     for (const colorScheme of ["light", "dark"] as const) {
       test(`at ${width}px in ${colorScheme}`, async ({ page }) => {
-        const settings = (await (await page.request.get("/api/workspace")).json()) as WorkspaceSettings;
-        const links = (await (await page.request.get("/api/report-links")).json()) as ReportLink[];
-        const scoped = links.find((l) => l.label !== null)!;
+        // The whole-workspace link is always listed first.
+        const [whole, scoped] = (await (await page.request.get("/api/report-links")).json()) as ReportLink[];
 
         await page.setViewportSize({ width, height: 844 });
         await page.emulateMedia({ colorScheme });
-        for (const path of [`/r/${settings.reportToken}`, `/r/${scoped.token}`]) {
+        for (const path of [`/r/${whole!.token}`, `/r/${scoped!.token}`]) {
           await page.goto(path);
           const overflow = await page.evaluate<number>(
             "document.documentElement.scrollWidth - document.documentElement.clientWidth",

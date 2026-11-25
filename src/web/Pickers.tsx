@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { MIN_DATE } from "../shared/dates";
-import { LIST_TITLES, LISTS, type Card, type ListId } from "../shared/model";
+import { LIST_TITLES, LISTS, type Card, type ListId, type Person } from "../shared/model";
 import type { Container } from "./groups";
 import styles from "./Pickers.module.css";
 import { Initial, OptionList } from "./Select";
@@ -13,6 +13,31 @@ export function ListPicker(props: { value: ListId; onPick: (list: ListId) => voi
       value={props.value}
       options={LISTS.map((id) => ({ id, name: LIST_TITLES[id] }))}
       onPick={(id) => props.onPick(id as ListId)}
+    />
+  );
+}
+
+const UNASSIGNED = "";
+
+/** The workspace's members as a listbox, for the card back's Responsable row. */
+export function AssigneePicker(props: {
+  value: string | null;
+  members: Person[];
+  onPick: (assigneeId: string | null) => void;
+}) {
+  return (
+    <OptionList
+      label="Responsable"
+      value={props.value ?? UNASSIGNED}
+      options={[
+        ...props.members.map((member) => ({
+          id: member.id,
+          name: member.name,
+          mark: <Initial name={member.name} />,
+        })),
+        { id: UNASSIGNED, name: "Sin asignar" },
+      ]}
+      onPick={(id) => props.onPick(id === UNASSIGNED ? null : id)}
     />
   );
 }

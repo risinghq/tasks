@@ -1,5 +1,5 @@
 import { createContext, useContext } from "react";
-import type { Label } from "../shared/model";
+import type { Label, Person } from "../shared/model";
 import type { CreateLabel, UpdateLabel } from "../shared/schemas";
 import type { LabelResult } from "./useBoard";
 
@@ -16,6 +16,8 @@ export type Ui = {
   addCard: (container: string, title: string) => void;
   /** The user's labels, by name. */
   labels: Label[];
+  /** The workspace's members. With one member there is nobody to assign, so the Responsable controls hide. */
+  members: Person[];
   /** Each of these answers with the message to show when the server refused. */
   createLabel: (input: Omit<CreateLabel, "id">) => Promise<LabelResult>;
   updateLabel: (id: string, patch: UpdateLabel) => Promise<LabelResult>;

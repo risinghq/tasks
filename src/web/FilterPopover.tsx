@@ -1,11 +1,11 @@
 import { Search, X } from "lucide-react";
-import { labelStyle, type Label } from "../shared/model";
+import { labelStyle, type Label, type Person } from "../shared/model";
 import { LabelDot } from "./CardView";
 import styles from "./FilterPopover.module.css";
 import select from "./Select.module.css";
 import { Initial, Select, type Option } from "./Select";
 import { Sheet } from "./Sheet";
-import { NO_LABEL, type Filter } from "./useFilter";
+import { criteria, NO_ASSIGNEE, NO_LABEL, type Filter } from "./useFilter";
 
 export function FilterPopover(props: {
   anchor: HTMLElement;
@@ -13,13 +13,14 @@ export function FilterPopover(props: {
   /** The cards matching the filter. */
   matches: number;
   labels: Label[];
+  members: Person[];
   requesters: string[];
   onChange: (filter: Filter) => void;
   onClear: () => void;
   onClose: () => void;
 }) {
   const { filter } = props;
-  const filtering = Boolean(filter.q || filter.label || filter.requester);
+  const filtering = criteria(filter) > 0;
   const cards = `${props.matches} ${props.matches === 1 ? "tarjeta" : "tarjetas"}`;
 
   const labelOptions: Option[] = [
@@ -39,6 +40,16 @@ export function FilterPopover(props: {
         />
       ),
     },
+  ];
+
+  const assigneeOptions: Option[] = [
+    { id: "", name: "Todos" },
+    ...props.members.map((member) => ({
+      id: member.id,
+      name: member.name,
+      mark: <Initial name={member.name} />,
+    })),
+    { id: NO_ASSIGNEE, name: "Sin asignar" },
   ];
 
   const requesterOptions: Option[] = [
@@ -78,6 +89,14 @@ export function FilterPopover(props: {
           options={labelOptions}
           onPick={(label) => props.onChange({ ...filter, label })}
         />
+        {props.members.length > 1 && (
+          <Select
+            label="Responsable"
+            value={filter.assignee}
+            options={assigneeOptions}
+            onPick={(assignee) => props.onChange({ ...filter, assignee })}
+          />
+        )}
         <Select
           label="Solicitante"
           value={filter.requester}
