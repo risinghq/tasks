@@ -1,8 +1,9 @@
 import { ArrowRight, Clock, CreditCard, Tag, Trash2, User } from "lucide-react";
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { TITLE_MAX, type Card } from "../shared/model";
 import { CardFace } from "./CardView";
 import { CardPopover, type CardActions, type PopoverKind } from "./CardPopover";
+import { placeBeside } from "./placeBeside";
 import styles from "./QuickEdit.module.css";
 import { useAutosize } from "./useAutosize";
 import { useEscape } from "./useEscape";
@@ -35,15 +36,23 @@ export function QuickEdit(props: {
   const [title, setTitle] = useState(card.title);
   const [popover, setPopover] = useState<{ kind: PopoverKind; anchor: HTMLElement } | null>(null);
   const field = useAutosize();
+  const editor = useRef<HTMLDivElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+  const [menuPlace, setMenuPlace] = useState<{ left: number; top: number } | null>(null);
   useEscape(props.onClose);
+
+  useLayoutEffect(() => {
+    if (!editor.current || !menu.current) return;
+    const size = { width: menu.current.offsetWidth, height: menu.current.offsetHeight };
+    const below = editor.current.getBoundingClientRect().bottom;
+    setMenuPlace(placeBeside(rect, below, size, { width: innerWidth, height: innerHeight }));
+  }, [rect]);
 
   function save() {
     const next = title.trim();
     if (next && next !== card.title) actions.edit({ title: next });
     props.onClose();
   }
-
-  const menuLeft = rect.right + 8 + MENU_WIDTH <= innerWidth ? rect.right + 8 : rect.left - 8 - MENU_WIDTH;
 
   const toggle = (kind: PopoverKind, anchor: HTMLElement) =>
     setPopover((open) => (open?.kind === kind ? null : { kind, anchor }));
@@ -55,7 +64,7 @@ export function QuickEdit(props: {
         if (event.target === event.currentTarget) save();
       }}
     >
-      <div className={styles.card} style={{ left: rect.left, top: rect.top, width: rect.width }}>
+      <div ref={editor} className={styles.card} style={{ left: rect.left, top: rect.top, width: rect.width }}>
         <CardFace
           card={card}
           title={
@@ -83,7 +92,11 @@ export function QuickEdit(props: {
         </button>
       </div>
 
-      <div className={styles.menu} style={{ left: menuLeft, top: rect.top, width: MENU_WIDTH }}>
+      <div
+        ref={menu}
+        className={styles.menu}
+        style={{ ...menuPlace, width: MENU_WIDTH, visibility: menuPlace ? "visible" : "hidden" }}
+      >
         <button
           type="button"
           className={styles.action}
@@ -104,7 +117,7 @@ export function QuickEdit(props: {
             <Icon size={16} aria-hidden /> {label}
           </button>
         ))}
-        <button type="button" className={styles.action} onClick={props.onDelete}>
+        <button type="button" className={styles.action} data-danger onClick={props.onDelete}>
           <Trash2 size={16} aria-hidden /> Eliminar
         </button>
       </div>

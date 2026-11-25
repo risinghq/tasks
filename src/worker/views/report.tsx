@@ -2,7 +2,7 @@
 import { raw } from "hono/html";
 import { addWeeks, dayHeading, weekRangeLabel } from "../../shared/dates";
 import { labelStyle, type Card, type Label } from "../../shared/model";
-import { Document } from "./layout";
+import { Document, type Share } from "./layout";
 import css from "./report.css?raw";
 
 export type ReportData = {
@@ -18,6 +18,7 @@ export type ReportData = {
   today: string;
   /** The page address the copy button shows, without the scheme. */
   url: string;
+  share: Share;
   days: { date: string; cards: Card[] }[];
   /** Every card outside Hecho, or null when the week shown is not the current one. */
   open: Card[] | null;
@@ -147,7 +148,12 @@ export function ReportPage(props: ReportData) {
   const rowProps = { today: props.today, labels, showLabels: props.showLabels };
 
   return (
-    <Document title={`${props.scopeName} · Informe ${weekRangeLabel(week)}`} css={css}>
+    <Document
+      title={`${props.scopeName} · Informe ${weekRangeLabel(week)}`}
+      css={css}
+      description={`${props.subtitle}: lo hecho cada día, lo que sigue en curso y lo que viene.`}
+      share={props.share}
+    >
       <header class="top">
         <div class="copy-wrap">
           <button id="copiar" class="copy" type="button" data-elevation="raised">

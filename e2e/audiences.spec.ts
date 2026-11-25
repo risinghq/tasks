@@ -78,15 +78,17 @@ const SIDEWAYS = `[document.documentElement, ...document.querySelectorAll("*")]
     && (el === document.documentElement || ["auto", "scroll"].includes(getComputedStyle(el).overflowX)))
   .map((el) => el.tagName.toLowerCase() + (el.className ? "." + String(el.className).split(" ")[0] : ""))`;
 
-test("no board view, card back or share dialog scrolls sideways from 320 to 1920px", async ({
+test("no board view, hovered card, quick edit, card back or share dialog scrolls sideways from 320 to 1920px", async ({
   page,
   tasks,
 }) => {
   const long = "Supercalifragilisticoespialidosoyconstantinopolitano";
+  const wrapping = "Revisar contrato con proveedor que vence a fin de mes";
   const space = await workspaceWith(page, "Ancho E2E", [
     { email: `larga-${Date.now()}@tasks.test`, name: `${long} Apellido` },
   ]);
   await space.card(`${long} ${long}`);
+  await space.card(wrapping);
   await space.label(`Cliente ${long}`);
   await tasks.open();
   await chooseWorkspace(page, "Ancho E2E");
@@ -95,6 +97,15 @@ test("no board view, card back or share dialog scrolls sideways from 320 to 1920
   for (const width of [320, 390, 768, 1024, 1440, 1920]) {
     await page.setViewportSize({ width, height: 900 });
     expect(await page.evaluate<string[]>(SIDEWAYS), `board at ${width}px`).toEqual([]);
+
+    await card(page, wrapping).hover();
+    expect(await page.evaluate<string[]>(SIDEWAYS), `hovered card at ${width}px`).toEqual([]);
+
+    await page.keyboard.press("e");
+    const actions = page.getByRole("button", { name: "Abrir tarjeta" });
+    await expect(actions).toBeInViewport({ ratio: 1 });
+    expect(await page.evaluate<string[]>(SIDEWAYS), `quick edit at ${width}px`).toEqual([]);
+    await page.keyboard.press("Escape");
 
     await card(page, long).click();
     await expect(page.getByRole("dialog", { name: "Tarjeta" })).toBeVisible();

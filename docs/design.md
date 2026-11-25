@@ -163,5 +163,6 @@ coarse pointer. Mover on the card back changes a card's list there.
   card's own title, edited in place over the card.
 - **The card back title.** It has no edge at rest, like Trello's inline title,
   and shows a background and the focus ring on focus.
-- **Quick edit outline.** The field has no focus ring of its own. The lifted
-  card and the scrim around it are the focus mark.
+- **Quick edit outline.** The field has no focus ring of its own. A focus ring
+  on the whole lifted card marks what is being edited, so the ring does not box
+  the title text inside the card.

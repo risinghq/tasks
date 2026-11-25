@@ -16,6 +16,12 @@
   position: absolute;
 }
 
+/* The ring marks the card being edited, so the text itself carries no box. */
+.card > :first-child {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
 /* Keep the field at the card's text size so the title does not jump. */
 .field {
   display: block;
@@ -23,9 +29,12 @@
   padding: 0;
   border: 0;
   background: transparent;
-  outline: none;
   resize: none;
   overflow: hidden;
+}
+
+.field:focus-visible {
+  outline: none;
 }
 
 .save {
@@ -44,7 +53,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  width: fit-content;
+  width: 100%;
   min-height: var(--control);
   padding: 0 var(--space-3);
   border: 0;
@@ -55,6 +64,11 @@
   transition:
     background-color var(--duration-fast) var(--ease-out),
     transform var(--duration-fast) var(--ease-out);
+}
+
+.action[data-danger] {
+  margin-top: var(--space-2);
+  color: var(--text-danger);
 }
 
 .action:active {
