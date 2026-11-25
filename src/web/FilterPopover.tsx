@@ -1,96 +1,11 @@
-import { Check, ChevronDown, Search, X } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { labelStyle, type Label } from "../shared/model";
+import { Search, X } from "lucide-react";
+import { labelStyle, type Label, type Person } from "../shared/model";
 import { LabelDot } from "./CardView";
 import styles from "./FilterPopover.module.css";
+import select from "./Select.module.css";
+import { Initial, Select, type Option } from "./Select";
 import { Sheet } from "./Sheet";
-import { NO_LABEL, type Filter } from "./useFilter";
-
-type Option = { id: string; name: string; mark?: ReactNode };
-
-/** A select whose options open in place inside the sheet. */
-function Select(props: { label: string; value: string; options: Option[]; onPick: (id: string) => void }) {
-  const [open, setOpen] = useState(false);
-  const button = useRef<HTMLButtonElement>(null);
-  const root = useRef<HTMLDivElement>(null);
-  const chosen = props.options.find((option) => option.id === props.value);
-
-  useEffect(() => {
-    if (open) root.current?.querySelector<HTMLElement>("[data-autofocus]")?.focus();
-  }, [open]);
-  const close = () => {
-    setOpen(false);
-    button.current?.focus();
-  };
-
-  return (
-    <div ref={root} className={styles.select} data-open={open}>
-      <button
-        ref={button}
-        type="button"
-        className={styles.selectButton}
-        aria-label={props.label}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
-      >
-        <span className={styles.selectLabel}>{props.label}</span>
-        <span className={styles.selectValue}>
-          {chosen?.mark}
-          {chosen?.name}
-        </span>
-        <ChevronDown size={16} className={styles.selectChevron} aria-hidden />
-      </button>
-      {open && (
-        <div
-          className={styles.listbox}
-          role="listbox"
-          aria-label={props.label}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") {
-              event.stopPropagation();
-              close();
-            }
-          }}
-        >
-          {props.options.map((option) => {
-            const selected = option.id === props.value;
-            return (
-              <button
-                key={option.id}
-                type="button"
-                role="option"
-                aria-selected={selected}
-                className={styles.option}
-                tabIndex={-1}
-                data-autofocus={selected || undefined}
-                onClick={() => {
-                  props.onPick(option.id);
-                  close();
-                }}
-              >
-                <span className={styles.optionText}>
-                  {option.mark}
-                  {option.name}
-                </span>
-                <Check size={16} className={styles.optionCheck} data-on={selected} aria-hidden />
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** An initial inside a ringed circle, as the requester mark. */
-function Initial({ name }: { name: string }) {
-  return (
-    <span className={styles.initial} aria-hidden>
-      {name[0]}
-    </span>
-  );
-}
+import { criteria, NO_ASSIGNEE, NO_LABEL, type Filter } from "./useFilter";
 
 export function FilterPopover(props: {
   anchor: HTMLElement;
@@ -98,13 +13,14 @@ export function FilterPopover(props: {
   /** The cards matching the filter. */
   matches: number;
   labels: Label[];
+  members: Person[];
   requesters: string[];
   onChange: (filter: Filter) => void;
   onClear: () => void;
   onClose: () => void;
 }) {
   const { filter } = props;
-  const filtering = Boolean(filter.q || filter.label || filter.requester);
+  const filtering = criteria(filter) > 0;
   const cards = `${props.matches} ${props.matches === 1 ? "tarjeta" : "tarjetas"}`;
 
   const labelOptions: Option[] = [
@@ -119,11 +35,21 @@ export function FilterPopover(props: {
       name: "Sin etiqueta",
       mark: (
         <span
-          className={styles.emptyDot}
+          className={select.emptyDot}
           style={{ boxShadow: `inset 0 0 0 1px ${labelStyle("blue").color}` }}
         />
       ),
     },
+  ];
+
+  const assigneeOptions: Option[] = [
+    { id: "", name: "Todos" },
+    ...props.members.map((member) => ({
+      id: member.id,
+      name: member.name,
+      mark: <Initial name={member.name} />,
+    })),
+    { id: NO_ASSIGNEE, name: "Sin asignar" },
   ];
 
   const requesterOptions: Option[] = [
@@ -163,6 +89,14 @@ export function FilterPopover(props: {
           options={labelOptions}
           onPick={(label) => props.onChange({ ...filter, label })}
         />
+        {props.members.length > 1 && (
+          <Select
+            label="Responsable"
+            value={filter.assignee}
+            options={assigneeOptions}
+            onPick={(assignee) => props.onChange({ ...filter, assignee })}
+          />
+        )}
         <Select
           label="Solicitante"
           value={filter.requester}

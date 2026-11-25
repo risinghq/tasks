@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { CardIdTaken, InvalidCard } from "./cards";
 import { LabelConflict } from "./labels";
+import { ReportLinkConflict, WholeLinkPermanent } from "./report-links";
 import { api } from "./routes/api";
 import { auth } from "./routes/auth";
 import { report } from "./routes/report";
@@ -15,6 +16,9 @@ app.onError((error, c) => {
   if (error instanceof InvalidCard) return c.json({ error: error.message }, 400);
   if (error instanceof CardIdTaken) return c.json({ error: "id already used" }, 409);
   if (error instanceof LabelConflict) return c.json({ error: "label already exists" }, 409);
+  if (error instanceof ReportLinkConflict) return c.json({ error: "report link already exists" }, 409);
+  if (error instanceof WholeLinkPermanent)
+    return c.json({ error: "the workspace link cannot be deleted" }, 409);
   console.error(error);
   return c.json({ error: "internal error" }, 500);
 });

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Card, Label } from "../shared/model";
+import type { Card, Label, Person } from "../shared/model";
 import type { CreateLabel, UpdateLabel } from "../shared/schemas";
 import { api, ApiError, removeOnExit } from "./api";
 import { project, serverIndex, settled, type Fields, type Op, type Pending } from "./boardState";
@@ -16,6 +16,7 @@ type State = {
   loadError: boolean;
   today: string;
   requesters: string[];
+  members: Person[];
   labels: Label[];
   olderWeek: string | null;
   /** The cards as the server holds them, once every write before the pending ones has settled. */
@@ -29,6 +30,7 @@ const empty: State = {
   loadError: false,
   today: "",
   requesters: [],
+  members: [],
   labels: [],
   olderWeek: null,
   base: [],
@@ -76,6 +78,7 @@ export function useBoard() {
           loaded: true,
           today: board.today,
           requesters: board.requesters,
+          members: board.members,
           labels: board.labels,
           olderWeek: board.olderWeek,
           base: board.cards,
@@ -176,6 +179,7 @@ export function useBoard() {
     loadError: state.loadError,
     today: state.today,
     requesters,
+    members: state.members,
     labels: state.labels,
     cards: view.visible,
     olderWeek: state.olderWeek,
@@ -189,6 +193,7 @@ export function useBoard() {
         title,
         description: "",
         labelId: null,
+        assigneeId: null,
         requester: null,
         checklist: [],
         list: to.list,

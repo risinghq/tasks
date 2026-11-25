@@ -1,7 +1,7 @@
 /** @jsxImportSource hono/jsx */
 import { raw } from "hono/html";
 import { addWeeks, dayHeading, weekRangeLabel } from "../../shared/dates";
-import { labelStyle, LIST_TITLES, type Card, type Label } from "../../shared/model";
+import { labelStyle, type Card, type Label } from "../../shared/model";
 import { Document } from "./layout";
 import css from "./report.css?raw";
 
@@ -9,7 +9,12 @@ export type ReportData = {
   token: string;
   week: string;
   currentWeek: string;
-  workspaceName: string;
+  /** What the link shows: the label's, the member's or the workspace's name. */
+  scopeName: string;
+  /** The line under the title: whose report it is. */
+  subtitle: string;
+  /** Each row names its label, except on a label link where they all share one. */
+  showLabels: boolean;
   today: string;
   /** The page address the copy button shows, without the scheme. */
   url: string;
@@ -19,16 +24,20 @@ export type ReportData = {
   labels: Label[];
 };
 
-const NO_LABEL_DOT = "var(--border-control)";
-
-const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
-
 const weekNumber = (week: string): number => Number(week.split("-W")[1]);
 
-/** "Hoy", "Ayer" or the weekday and date, for a row's status. */
-function dayStatus(doneDate: string, today: string): string {
-  const first = dayHeading(doneDate, today).split(",")[0]!;
-  return first.charAt(0).toUpperCase() + first.slice(1);
+/** "Hoy", "Ayer" or the weekday and date, heading a done group. */
+function dayName(date: string, today: string): string {
+  const heading = dayHeading(date, today);
+  return heading.charAt(0).toUpperCase() + heading.slice(1);
+}
+
+/** The first non-empty line of a description, for the muted line under a title. */
+function firstLine(description: string): string | undefined {
+  return description
+    .split("\n")
+    .map((line) => line.trim())
+    .find(Boolean);
 }
 
 const CHECK = raw(
@@ -67,30 +76,54 @@ const COPY_SCRIPT = raw(`<script>
 })();
 </script>`);
 
-function ReportRow(props: { card: Card; done?: boolean; today: string }) {
-  const { card, today } = props;
-  const done = props.done === true;
+function LabelTag(props: { label: Label | undefined }) {
+  if (!props.label) return null;
+  return (
+    <span class="tag">
+      <span
+        class="tag-dot"
+        style={{ background: labelStyle(props.label.color).background }}
+        aria-hidden="true"
+      />
+      <span class="tag-name">{props.label.name}</span>
+    </span>
+  );
+}
+
+function ReportRow(props: {
+  card: Card;
+  kind: "done" | "open" | "next";
+  today: string;
+  labels: Label[];
+  showLabels: boolean;
+}) {
+  const { card, kind, labels } = props;
   const total = card.checklist.length;
   const checked = card.checklist.filter((item) => item.done).length;
-  const showChecklist = !done && total > 0;
+  const summary = kind === "done" ? firstLine(card.description) : undefined;
+  const label = labels.find((l) => l.id === card.labelId);
   return (
     <div class="row">
-      <span class={done ? "mark done" : "mark"} aria-hidden="true">
-        {done && CHECK}
+      <span class={kind === "done" ? "mark done" : "mark"} aria-hidden="true">
+        {kind === "done" && CHECK}
       </span>
       <span class="row-main">
-        <span class="row-title">{card.title}</span>
-        {(card.requester || showChecklist) && (
+        <span class="row-head">
+          <span class="row-title">{card.title}</span>
+          {props.showLabels && <LabelTag label={label} />}
+        </span>
+        {summary && <span class="row-desc">{summary}</span>}
+        {(card.requester || (kind === "open" && total > 0)) && (
           <span class="row-meta">
             {card.requester && (
               <span class="req">
                 <span class="avatar" aria-hidden="true">
                   {card.requester.charAt(0).toUpperCase()}
                 </span>
-                {card.requester}
+                <span class="req-name">{card.requester}</span>
               </span>
             )}
-            {showChecklist && (
+            {kind === "open" && total > 0 && (
               <span class="prog">
                 <span class="bar" aria-hidden="true">
                   <span style={{ width: `${(checked / total) * 100}%` }} />
@@ -101,7 +134,6 @@ function ReportRow(props: { card: Card; done?: boolean; today: string }) {
           </span>
         )}
       </span>
-      <span class="row-status">{done ? dayStatus(card.doneDate ?? "", today) : "En curso"}</span>
     </div>
   );
 }
@@ -109,52 +141,14 @@ function ReportRow(props: { card: Card; done?: boolean; today: string }) {
 export function ReportPage(props: ReportData) {
   const { token, week, currentWeek, labels } = props;
   const href = (target: string) => `/r/${token}?semana=${target}`;
-  const finished = props.days.flatMap((day) => day.cards);
   const isCurrent = props.open !== null;
   const inProgress = (props.open ?? []).filter((card) => card.list === "en_curso");
-  const carry = (props.open ?? []).filter((card) => card.list !== "pendiente");
-  const labelOf = (card: Card) => labels.find((label) => label.id === card.labelId);
-
-  const stats = [
-    { n: finished.length, label: "Hechas", accent: true },
-    ...(isCurrent
-      ? [
-          { n: inProgress.length, label: "En curso", accent: false },
-          { n: carry.length, label: "Pasan a la próxima semana", accent: false },
-        ]
-      : []),
-  ];
-
-  const groups = [
-    ...labels.map((label) => ({
-      id: label.id as string | null,
-      name: label.name,
-      color: labelStyle(label.color).background,
-    })),
-    { id: null, name: "Sin etiqueta", color: NO_LABEL_DOT },
-  ]
-    .map((group) => {
-      const done = finished.filter((card) => card.labelId === group.id);
-      const curso = inProgress.filter((card) => card.labelId === group.id);
-      const summary = [
-        done.length ? plural(done.length, "hecha", "hechas") : "",
-        curso.length ? `${curso.length} en curso` : "",
-      ]
-        .filter(Boolean)
-        .join(" · ");
-      return { ...group, done, curso, summary };
-    })
-    .filter((group) => group.done.length + group.curso.length > 0);
+  const next = (props.open ?? []).filter((card) => card.list === "esta_semana");
+  const rowProps = { today: props.today, labels, showLabels: props.showLabels };
 
   return (
-    <Document title={`Informe ${weekRangeLabel(week)}`} css={css}>
+    <Document title={`${props.scopeName} · Informe ${weekRangeLabel(week)}`} css={css}>
       <header class="top">
-        <span class="mono" aria-hidden="true">
-          {props.workspaceName.charAt(0).toUpperCase()}
-        </span>
-        <span class="ws">{props.workspaceName}</span>
-        <span class="kind">Informe semanal</span>
-        <span class="fill" />
         <div class="copy-wrap">
           <button id="copiar" class="copy" type="button" data-elevation="raised">
             {LINK_ICON}
@@ -168,74 +162,54 @@ export function ReportPage(props: ReportData) {
         </div>
       </header>
       <main class="column">
-        <p class="lead">
-          Semana {weekNumber(week)} · {weekRangeLabel(week)}
-        </p>
-        <h1>
-          {plural(finished.length, "tarea hecha", "tareas hechas")} {isCurrent ? "esta" : "esa"} semana.
-        </h1>
-        <div class="stats" data-elevation="raised">
-          {stats.map((stat) => (
-            <div class="stat" key={stat.label}>
-              <span class={stat.accent ? "num accent" : "num"}>{stat.n}</span>
-              <span class="stat-label">{stat.label}</span>
-            </div>
-          ))}
-        </div>
-        <div class="groups">
-          {groups.map((group, index) => (
-            <section
-              class="group"
-              data-elevation="raised"
-              aria-labelledby={`group-${index}`}
-              key={group.name}
-            >
-              <div class="group-head">
-                <span class="dot" style={{ background: group.color }} aria-hidden="true" />
-                <h2 class="group-name" id={`group-${index}`}>
-                  {group.name}
-                </h2>
-                <span class="group-sum">{group.summary}</span>
-              </div>
-              {group.done.map((card) => (
-                <ReportRow card={card} done today={props.today} key={card.id} />
-              ))}
-              {group.curso.map((card) => (
-                <ReportRow card={card} today={props.today} key={card.id} />
-              ))}
-            </section>
-          ))}
-        </div>
-        {isCurrent && carry.length > 0 && (
-          <section class="carry" aria-labelledby="carry-title">
-            <h2 class="carry-title" id="carry-title">
-              Pasa a la próxima semana
-            </h2>
-            <div class="carry-list">
-              {carry.map((card) => {
-                const label = labelOf(card);
-                return (
-                  <div class="crow" key={card.id}>
-                    <span
-                      class="cdot"
-                      style={{ background: label ? labelStyle(label.color).background : NO_LABEL_DOT }}
-                      aria-hidden="true"
-                    />
-                    <span class="ctitle">{card.title}</span>
-                    <span class="clist">{LIST_TITLES[card.list]}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        )}
-        <footer class="foot">
-          <nav>
+        <h1 class="scope">{props.scopeName}</h1>
+        <p class="sub">{props.subtitle}</p>
+        <div class="week-bar">
+          <p class="week">
+            Semana {weekNumber(week)} · {weekRangeLabel(week)}
+          </p>
+          <nav class="week-nav" aria-label="Semanas">
             <a href={href(addWeeks(week, -1))}>← Semana {weekNumber(addWeeks(week, -1))}</a>
             {week < currentWeek && (
               <a href={href(addWeeks(week, 1))}>Semana {weekNumber(addWeeks(week, 1))} →</a>
             )}
           </nav>
+        </div>
+        <section class="sec" aria-labelledby="hecho">
+          <h2 class="sec-name" id="hecho">
+            Hecho
+          </h2>
+          {props.days.length === 0 && <p class="empty">Nada hecho esta semana.</p>}
+          {props.days.map((day) => (
+            <div class="day" key={day.date}>
+              <h3 class="day-name">{dayName(day.date, props.today)}</h3>
+              {day.cards.map((card) => (
+                <ReportRow card={card} kind="done" {...rowProps} key={card.id} />
+              ))}
+            </div>
+          ))}
+        </section>
+        {inProgress.length > 0 && (
+          <section class="sec" aria-labelledby="en-curso">
+            <h2 class="sec-name" id="en-curso">
+              En curso
+            </h2>
+            {inProgress.map((card) => (
+              <ReportRow card={card} kind="open" {...rowProps} key={card.id} />
+            ))}
+          </section>
+        )}
+        {isCurrent && next.length > 0 && (
+          <section class="sec" aria-labelledby="siguiente">
+            <h2 class="sec-name" id="siguiente">
+              Siguiente
+            </h2>
+            {next.map((card) => (
+              <ReportRow card={card} kind="next" {...rowProps} key={card.id} />
+            ))}
+          </section>
+        )}
+        <footer class="foot">
           <span class="note">Solo lectura{isCurrent ? " · se actualiza hasta el domingo" : ""}</span>
         </footer>
       </main>

@@ -74,7 +74,9 @@ async function idOf(card: TrelloCard, index: number, ownerKey: string): Promise<
 }
 
 export type ImportedLabel = { name: string; color: LabelColor };
-export type ImportedCard = Omit<Card, "position" | "labelId"> & { label: ImportedLabel | null };
+export type ImportedCard = Omit<Card, "position" | "labelId" | "assigneeId"> & {
+  label: ImportedLabel | null;
+};
 
 /**
  * Keeps each group's Trello order and derives stable ids from the export and

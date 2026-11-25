@@ -27,6 +27,8 @@ e2e          Playwright tests that drive the app in Chromium
    picks the workspace (see Workspaces). `/api/members` (`routes/members.ts`)
    lists and edits the workspace's members, and changing them needs the owner
    role. `/api/tokens` (`routes/tokens.ts`) manages the user's API tokens.
+   `/api/report-links` (`routes/report-links.ts`) lists the shared report links,
+   and creating, regenerating or deleting one needs the owner role.
 4. `/r/<token>` (`routes/report.tsx`), public.
 5. `/assets/*`, `/fonts/*` and `/favicon.svg`, public static files.
 6. Everything else needs the session and returns the React app, including a
@@ -41,11 +43,10 @@ Each person has a row in `users`: id, email (unique, always lowercase), name and
 session version. Sign-up is open to any Google account with a verified email.
 There are no global admins.
 
-Cards, labels, API tokens and the report token belong to a workspace
-(`workspaces`), not to a user. `workspace_members` joins users to workspaces
-with the role `owner` or `member`. An owner renames or deletes the workspace,
-manages members and regenerates the report link. A member works on the cards and
-labels.
+Cards, labels, API tokens and report links belong to a workspace (`workspaces`),
+not to a user. `workspace_members` joins users to workspaces with the role
+`owner` or `member`. An owner renames or deletes the workspace, manages members
+and the report links. A member works on the cards and labels.
 
 A user's personal workspace has the user's own id and the name "Personal".
 Signing up for the first time creates both rows in one batch
@@ -139,6 +140,15 @@ stripe. Deleting a label sets `label_id` to null on its cards, in the same
 statement (`ON DELETE SET NULL`). A card can only take a label of its own user
 (400 otherwise). A name that the user already has gets 409.
 
+### Assignee
+
+A card has one responsible member or none, in `cards.assignee_id`. Only a member
+of the card's workspace can be assigned (400 otherwise). Removing a member
+clears their cards in the same batch, and deleting the user clears them through
+`ON DELETE SET NULL`. The web app hides Responsable on the card back, the card
+and the filter while the workspace has one member, since nobody else can take
+the card.
+
 ### Session
 
 The session is a signed cookie. The server stores no sessions, only the user.
@@ -222,25 +232,40 @@ primary key of `workspace_members`, not by a prior read.
 A member can remove themselves. An owner can remove or demote anyone. A change
 that would leave no other owner is 409; the guard is part of the same statement,
 so two owners cannot remove each other together. Removing a member deletes their
-API tokens for that workspace.
+API tokens and report link for that workspace and unassigns their cards.
 
-### Report token
+### Report links
 
-`workspaces.report_token` holds one token of 32 random bytes per workspace. The
-column has a random default, so the token exists as soon as the row does and a
-read never writes. The migration moves the existing token to the first admin's
-personal workspace unchanged, so the link that exists keeps working.
+A freelancer works for several clients and each client must see only its own
+work; a company reads what each employee did. A report link therefore has one
+audience. `report_links` holds one row per shared link: `workspace_id`, a
+`token` of 32 random bytes (unique), a nullable `label_id`, a nullable
+`member_id`, and `created_at`. A check allows at most one of the two scopes:
 
-| State   | Entered by                                | Left by             |
-| ------- | ----------------------------------------- | ------------------- |
-| Current | The workspace's creation, or a regenerate | The next regenerate |
+- Neither: the whole workspace. Each workspace has exactly one (a partial unique
+  index), created on demand by the first list, and it cannot be deleted (409).
+- `label_id`: the cards with that label, for one client. A label carries at most
+  one link, and deleting the label deletes it.
+- `member_id`: the cards assigned to that member, for one employee. A member
+  carries at most one link per workspace. Removing the member deletes it.
 
-Members read the token and only owners regenerate it (`/api/workspace`). Anyone
-with the token reads that workspace's report: its name and its cards, never
-another workspace's. A personal workspace reports under its owner's name.
-Regenerating is one UPDATE, so the old link stops at once. Two tabs regenerating
-together leave one token in the row, the later write, and the other tab shows a
-link that no longer works until it reloads the settings.
+`GET /api/report-links` lists the whole link first, then the scoped ones. `POST`
+takes exactly one of `labelId` or `memberId` (400 for none or both, 409 for a
+scope that already has a link). `POST /api/report-links/<id>/token` replaces the
+token in one UPDATE, so the old link dies at once, and `DELETE` removes a scoped
+link. Every change needs the owner role. The web app shows the links in the
+Compartir informe dialog (`ShareDialog.tsx`).
+
+| State   | Entered by                           | Left by                       |
+| ------- | ------------------------------------ | ----------------------------- |
+| Current | The link's creation, or a regenerate | The next regenerate or delete |
+
+Anyone with a token reads that link's report: its scope and its cards, never
+another workspace's. A label link shows only that label's cards. A personal
+workspace reports under its owner's name. A member link reports under the
+member's name. Two tabs regenerating together leave one token in the row, the
+later write, and the other tab shows a link that no longer works until it
+reopens the dialog.
 
 The report sends `X-Robots-Tag: noindex, nofollow` and
 `Cache-Control: no-store`.
@@ -305,16 +330,17 @@ card with Space, moves it with the arrows and drops it with Space.
 
 ### URL and local state
 
-| State                      | Kept in                                  |
-| -------------------------- | ---------------------------------------- |
-| The open card              | The path `/c/<id>` (`useCardRoute.ts`)   |
-| The filter                 | The query `q`, `etiqueta`, `solicitante` |
-| Open or closed day         | localStorage, `tasks.hecho-open`         |
-| Stripes as names or stripe | localStorage, `tasks.labels-expanded`    |
-| Theme: Claro or Oscuro     | localStorage, `tasks.theme`              |
-| Composer drafts            | Memory, until the page reloads           |
+| State                      | Kept in                                                 |
+| -------------------------- | ------------------------------------------------------- |
+| The open card              | The path `/c/<id>` (`useCardRoute.ts`)                  |
+| The filter                 | The query `q`, `etiqueta`, `responsable`, `solicitante` |
+| Open or closed day         | localStorage, `tasks.hecho-open`                        |
+| Stripes as names or stripe | localStorage, `tasks.labels-expanded`                   |
+| Theme: Claro or Oscuro     | localStorage, `tasks.theme`                             |
+| Composer drafts            | Memory, until the page reloads                          |
 
-`etiqueta` holds a label id, or `none` for cards without a label.
+`etiqueta` holds a label id, or `none` for cards without a label. `responsable`
+holds a member id, or `none` for unassigned cards.
 
 Opening a card pushes `/c/<id>`, so the back button closes it. A page loaded on
 `/c/<id>` fetches the card with `GET /api/cards/<id>` when the loaded weeks do
@@ -331,13 +357,15 @@ They do nothing while the focus is in a text field or a modal is open.
 
 ### Layout
 
-The header holds the board title and Filtrar on the left and one user menu on
-the right, named with the person's name. The menu (`UserMenu.tsx`) offers
-Ajustes, Tema, Atajos de teclado and Salir.
+The header holds the board title and Filtrar on the left, and Compartir informe
+and one user menu on the right, named with the person's name. The menu
+(`UserMenu.tsx`) offers Ajustes, Tema, Atajos de teclado and Salir. Under 768px
+Compartir informe moves into the workspace switcher.
 
-From 768px the four lists sit side by side. Each list has its count in the
-header and one composer at its foot. A list with no cards shows one line that
-names its next action, or "Sin coincidencias" while a filter is on.
+From 768px the four lists sit side by side and shrink together, up to 17rem
+each, so the board never scrolls sideways. Each list has its count in the header
+and one composer at its foot. A list with no cards shows one line that names its
+next action, or "Sin coincidencias" while a filter is on.
 
 Under 768px a tab bar names the four lists and `Board.tsx` shows the one chosen,
 starting on En curso. The other lists are `display: none`, so on a narrow screen

@@ -94,11 +94,7 @@ test("the workspace switcher lists the spaces with their open counts", async ({ 
   const personal = sheet.getByRole("radio", { name: /Personal/ });
   await expect(personal).toHaveAttribute("aria-checked", "true");
   await expect(personal).toContainText("1 abierta");
-  await expect(page.getByRole("link", { name: "Informe semanal" })).toHaveAttribute("href", /^\/r\//);
-  await expect(sheet.getByRole("menuitem", { name: "Informe semanal de Personal" })).toHaveAttribute(
-    "href",
-    /^\/r\//,
-  );
+  await expect(sheet.getByRole("menuitem", { name: "Compartir informe" })).toBeVisible();
   await expect(sheet.getByRole("menuitem", { name: "Espacio nuevo" })).toBeVisible();
 
   await page.keyboard.press("Escape");

@@ -1,5 +1,14 @@
 import { sql } from "drizzle-orm";
-import { check, index, integer, primaryKey, sqliteTable, text, unique } from "drizzle-orm/sqlite-core";
+import {
+  check,
+  index,
+  integer,
+  primaryKey,
+  sqliteTable,
+  text,
+  unique,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
 import {
   LABEL_COLORS,
   LISTS,
@@ -22,14 +31,10 @@ export const users = sqliteTable(
   (table) => [check("email_lowercase", sql`${table.email} = lower(${table.email})`)],
 );
 
-/** A board. Cards, labels and the report link belong to a workspace. */
+/** A board. Cards, labels and report links belong to a workspace. */
 export const workspaces = sqliteTable("workspaces", {
   id: text().primaryKey(),
   name: text().notNull(),
-  reportToken: text("report_token")
-    .notNull()
-    .unique()
-    .default(sql`(lower(hex(randomblob(32))))`),
   /** Unix seconds. */
   createdAt: integer("created_at").notNull(),
 });
@@ -78,6 +83,8 @@ export const cards = sqliteTable(
     title: text().notNull(),
     description: text().notNull().default(""),
     labelId: text("label_id").references(() => labels.id, { onDelete: "set null" }),
+    /** The member who does the card. Removing the member clears it in workspaces.ts. */
+    assigneeId: text("assignee_id").references(() => users.id, { onDelete: "set null" }),
     requester: text(),
     checklist: text({ mode: "json" }).$type<ChecklistItem[]>().notNull().default([]),
     list: text({ enum: LISTS }).$type<ListId>().notNull(),
@@ -87,6 +94,40 @@ export const cards = sqliteTable(
   (table) => [
     index("cards_group").on(table.workspaceId, table.list, table.doneDate, table.position),
     check("done_date_iff_hecho", sql`(${table.list} = 'hecho') = (${table.doneDate} is not null)`),
+  ],
+);
+
+/**
+ * One shared read-only link to the weekly report. `label_id` limits the report
+ * to the cards of one label, `member_id` to the cards assigned to one member.
+ * With both null the link shows the whole workspace.
+ */
+export const reportLinks = sqliteTable(
+  "report_links",
+  {
+    id: text().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    token: text()
+      .notNull()
+      .unique()
+      .default(sql`(lower(hex(randomblob(32))))`),
+    labelId: text("label_id").references(() => labels.id, { onDelete: "cascade" }),
+    memberId: text("member_id").references(() => users.id, { onDelete: "cascade" }),
+    /** Unix seconds. */
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    index("report_links_workspace").on(table.workspaceId),
+    /** At most one link per label. Nulls do not conflict. */
+    unique("report_links_label").on(table.labelId),
+    unique("report_links_member").on(table.workspaceId, table.memberId),
+    /** One whole-workspace link per workspace, created on demand. */
+    uniqueIndex("report_links_whole")
+      .on(table.workspaceId)
+      .where(sql`${table.labelId} is null and ${table.memberId} is null`),
+    check("report_links_one_scope", sql`${table.labelId} is null or ${table.memberId} is null`),
   ],
 );
 

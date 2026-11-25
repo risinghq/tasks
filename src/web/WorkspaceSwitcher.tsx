@@ -1,4 +1,4 @@
-import { Check, ChevronDown, ExternalLink, Plus } from "lucide-react";
+import { Check, ChevronDown, Plus, Share } from "lucide-react";
 import { useState } from "react";
 import type { Me } from "../shared/model";
 import { Sheet } from "./Sheet";
@@ -21,7 +21,7 @@ export function WorkspaceSwitcher(props: {
   name: string;
   /** Live open-card count of the current workspace, from the loaded board. */
   openCount: number;
-  reportUrl: string | null;
+  onShare: () => void;
   onSwitch: (id: string) => void;
   onNewWorkspace: () => void;
 }) {
@@ -71,12 +71,18 @@ export function WorkspaceSwitcher(props: {
               })}
             </div>
             <div className={styles.divider} />
-            {props.reportUrl && (
-              <a href={props.reportUrl} className={styles.action} role="menuitem">
-                <span className={styles.actionText}>Informe semanal de {props.name}</span>
-                <ExternalLink size={14} className={styles.actionIcon} aria-hidden />
-              </a>
-            )}
+            <button
+              type="button"
+              role="menuitem"
+              className={styles.action}
+              onClick={() => {
+                setAnchor(null);
+                props.onShare();
+              }}
+            >
+              <Share size={16} className={styles.actionIcon} aria-hidden />
+              <span className={styles.actionText}>Compartir informe</span>
+            </button>
             <button
               type="button"
               role="menuitem"

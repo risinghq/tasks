@@ -1,7 +1,7 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { limaDate, parseWeek, weekOf } from "../../shared/dates";
-import type { Board, DoneWeek, Me, WorkspaceSettings } from "../../shared/model";
+import type { Board, DoneWeek, Me, Workspace } from "../../shared/model";
 import {
   createCardSchema,
   createLabelSchema,
@@ -17,15 +17,9 @@ import { connect } from "../db/client";
 import { labelsOf } from "../labels";
 import { requireOwner, requireSession, requireWorkspace, type AppEnv } from "../session";
 import { findUser, renameUser } from "../users";
-import {
-  createWorkspace,
-  deleteWorkspace,
-  regenerateReportToken,
-  renameWorkspace,
-  reportTokenOf,
-  workspacesOf,
-} from "../workspaces";
+import { createWorkspace, deleteWorkspace, listMembers, renameWorkspace, workspacesOf } from "../workspaces";
 import { members } from "./members";
+import { reportLinkRoutes } from "./report-links";
 import { tokens } from "./tokens";
 
 export const api = new Hono<AppEnv>();
@@ -58,6 +52,7 @@ api.post("/workspaces", zValidator("json", createWorkspaceSchema), async (c) => 
 api.use(requireWorkspace);
 api.route("/members", members);
 api.route("/tokens", tokens);
+api.route("/report-links", reportLinkRoutes);
 
 const today = () => limaDate(new Date());
 
@@ -66,14 +61,23 @@ api.get("/board", async (c) => {
   const workspaceId = c.get("workspace").id;
   const cards = cardsOf(db, workspaceId);
   const week = weekOf(today());
-  const [open, done, labels, olderWeek, requesters] = await Promise.all([
+  const [open, done, labels, olderWeek, requesters, people] = await Promise.all([
     cards.pendingAndActive(),
     cards.doneInWeek(week),
     labelsOf(db, workspaceId).list(),
     cards.olderWeekWithCards(week),
     cards.requesterSuggestions(),
+    listMembers(db, workspaceId),
   ]);
-  const board: Board = { today: today(), week, cards: [...open, ...done], labels, olderWeek, requesters };
+  const board: Board = {
+    today: today(),
+    week,
+    cards: [...open, ...done],
+    labels,
+    olderWeek,
+    requesters,
+    members: people.map(({ id, name }) => ({ id, name })),
+  };
   return c.json(board);
 });
 
@@ -134,26 +138,17 @@ api.delete("/labels/:id", async (c) => {
   return deleted ? c.body(null, 204) : c.json({ error: "not found" }, 404);
 });
 
-const settingsOf = async (c: {
-  env: Env;
-  get(key: "workspace"): WorkspaceSettings;
-}): Promise<WorkspaceSettings> => {
-  const { id, name, role } = c.get("workspace");
-  return { id, name, role, reportToken: await reportTokenOf(connect(c.env), id) };
+const workspaceOf = (workspace: Workspace): Workspace => {
+  const { id, name, role } = workspace;
+  return { id, name, role };
 };
 
-api.get("/workspace", async (c) => c.json(await settingsOf(c)));
+api.get("/workspace", (c) => c.json(workspaceOf(c.get("workspace"))));
 
 api.patch("/workspace", requireOwner, zValidator("json", updateWorkspaceSchema), async (c) => {
   const { name } = c.req.valid("json");
   await renameWorkspace(connect(c.env), c.get("workspace").id, name);
-  c.set("workspace", { ...c.get("workspace"), name });
-  return c.json(await settingsOf(c));
-});
-
-api.post("/workspace/report-token", requireOwner, async (c) => {
-  const { id, name, role } = c.get("workspace");
-  return c.json({ id, name, role, reportToken: await regenerateReportToken(connect(c.env), id) });
+  return c.json(workspaceOf({ ...c.get("workspace"), name }));
 });
 
 /** A personal workspace is a user's own id. It stays, so every user keeps a default board. */

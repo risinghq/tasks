@@ -3,7 +3,10 @@ import { weekDays, weekOf } from "../shared/dates";
 import type { Card, ListId } from "../shared/model";
 import type { CreateCard, UpdateCard } from "../shared/schemas";
 import { batch, type Db } from "./db/client";
-import { cards, labels } from "./db/schema";
+import { cards, labels, workspaceMembers } from "./db/schema";
+
+/** At most one of the two: a report link names a label or a member, never both. */
+export type CardScope = { labelId?: string; memberId?: string };
 
 type Placement = { list: ListId; doneDate: string | null };
 
@@ -18,6 +21,7 @@ const cardColumns = {
   title: cards.title,
   description: cards.description,
   labelId: cards.labelId,
+  assigneeId: cards.assigneeId,
   requester: cards.requester,
   checklist: cards.checklist,
   list: cards.list,
@@ -79,10 +83,15 @@ const renumber = (workspaceId: string, p: Placement): SQL => sql`
 /**
  * Every read and write of cards, for one workspace. The id comes from
  * `requireWorkspace`, and every statement here names it, so a route cannot reach
- * another workspace's cards.
+ * another workspace's cards. A scope further limits every read and write to the
+ * cards of one label or of one assignee: the report uses it for a scoped link.
  */
-export function cardsOf(db: Db, workspaceId: string) {
-  const mine = eq(cards.workspaceId, workspaceId);
+export function cardsOf(db: Db, workspaceId: string, scope: CardScope = {}) {
+  const mine = and(
+    eq(cards.workspaceId, workspaceId),
+    scope.labelId ? eq(cards.labelId, scope.labelId) : undefined,
+    scope.memberId ? eq(cards.assigneeId, scope.memberId) : undefined,
+  );
 
   const get = async (id: string): Promise<Card | undefined> =>
     db
@@ -91,13 +100,22 @@ export function cardsOf(db: Db, workspaceId: string) {
       .where(and(eq(cards.id, id), mine))
       .get();
 
-  const assertOwnLabel = async (labelId: string): Promise<void> => {
+  const assertOwnLabel = async (wanted: string): Promise<void> => {
     const label = await db
       .select({ id: labels.id })
       .from(labels)
-      .where(and(eq(labels.id, labelId), eq(labels.workspaceId, workspaceId)))
+      .where(and(eq(labels.id, wanted), eq(labels.workspaceId, workspaceId)))
       .get();
     if (!label) throw new InvalidCard("unknown label");
+  };
+
+  const assertMember = async (wanted: string): Promise<void> => {
+    const member = await db
+      .select({ id: workspaceMembers.userId })
+      .from(workspaceMembers)
+      .where(and(eq(workspaceMembers.userId, wanted), eq(workspaceMembers.workspaceId, workspaceId)))
+      .get();
+    if (!member) throw new InvalidCard("unknown assignee");
   };
 
   return {
@@ -181,6 +199,7 @@ export function cardsOf(db: Db, workspaceId: string) {
       const moved = !sameGroup(card, placement);
 
       if (fields.labelId) await assertOwnLabel(fields.labelId);
+      if (fields.assigneeId) await assertMember(fields.assigneeId);
 
       if (!moved && index === undefined) {
         if (Object.keys(fields).length === 0) return card;

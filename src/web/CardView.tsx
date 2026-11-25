@@ -64,12 +64,13 @@ export function CardFace({
   lifted?: boolean;
   onToggleDone?: () => void;
 }) {
-  const { labels } = useUi();
+  const { labels, members } = useUi();
   const label = labels.find((known) => known.id === card.labelId);
+  const assignee = members.length > 1 ? members.find((member) => member.id === card.assigneeId) : undefined;
   const total = card.checklist.length;
   const checked = card.checklist.filter((item) => item.done).length;
   const hasDescription = card.description.trim() !== "";
-  const hasMeta = label || card.requester || total > 0 || hasDescription;
+  const hasMeta = label || card.requester || total > 0 || hasDescription || assignee;
   const done = card.list === "hecho";
 
   return (
@@ -82,33 +83,45 @@ export function CardFace({
       </div>
       {hasMeta && (
         <div className={styles.meta}>
-          {label && (
-            <span className={styles.metaItem} data-label={label.id}>
-              <LabelDot color={label.color} />
-              {label.name}
-            </span>
-          )}
-          {card.requester && (
-            <span className={styles.metaItem} data-strong>
-              <span className={styles.avatar} aria-hidden>
-                {card.requester[0]}
+          <div className={styles.metaItems}>
+            {label && (
+              <span className={styles.metaItem} data-label={label.id}>
+                <LabelDot color={label.color} />
+                {label.name}
               </span>
-              {card.requester}
-            </span>
-          )}
-          {total > 0 && (
-            <span className={styles.metaItem} data-complete={checked === total}>
-              <span
-                className={styles.ring}
-                style={{ "--p": `${(checked / total) * 100}%` } as CSSProperties}
-                aria-hidden
-              />
-              {checked}/{total}
-            </span>
-          )}
-          {hasDescription && (
-            <span className={styles.metaItem} data-faint>
-              <AlignLeft size={14} aria-label="Tiene descripción" />
+            )}
+            {card.requester && (
+              <span className={styles.metaItem} data-strong>
+                <span className={styles.avatar} aria-hidden>
+                  {card.requester[0]}
+                </span>
+                {card.requester}
+              </span>
+            )}
+            {total > 0 && (
+              <span className={styles.metaItem} data-complete={checked === total}>
+                <span
+                  className={styles.ring}
+                  style={{ "--p": `${(checked / total) * 100}%` } as CSSProperties}
+                  aria-hidden
+                />
+                {checked}/{total}
+              </span>
+            )}
+            {hasDescription && (
+              <span className={styles.metaItem} data-faint>
+                <AlignLeft size={14} aria-label="Tiene descripción" />
+              </span>
+            )}
+          </div>
+          {assignee && (
+            <span
+              className={styles.assignee}
+              title={`Responsable: ${assignee.name}`}
+              role="img"
+              aria-label={`Responsable: ${assignee.name}`}
+            >
+              {assignee.name[0]}
             </span>
           )}
         </div>

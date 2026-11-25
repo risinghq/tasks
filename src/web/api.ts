@@ -8,11 +8,11 @@ import type {
   ListId,
   Me,
   Member,
+  ReportLink,
   Workspace,
   WorkspaceRole,
-  WorkspaceSettings,
 } from "../shared/model";
-import type { CreateLabel, UpdateCard, UpdateLabel } from "../shared/schemas";
+import type { CreateLabel, CreateReportLink, UpdateCard, UpdateLabel } from "../shared/schemas";
 import { chooseWorkspace, storedWorkspace } from "./workspace";
 
 export class ApiError extends Error {
@@ -65,10 +65,13 @@ export const api = {
   me: () => request<Me>("/api/me"),
   rename: (name: string) => request<Me>("/api/me", "PATCH", { name }),
   createWorkspace: (name: string) => request<Workspace>("/api/workspaces", "POST", { name }),
-  workspace: () => request<WorkspaceSettings>("/api/workspace"),
-  renameWorkspace: (name: string) => request<WorkspaceSettings>("/api/workspace", "PATCH", { name }),
+  workspace: () => request<Workspace>("/api/workspace"),
+  renameWorkspace: (name: string) => request<Workspace>("/api/workspace", "PATCH", { name }),
   deleteWorkspace: () => request<void>("/api/workspace", "DELETE"),
-  regenerateToken: () => request<WorkspaceSettings>("/api/workspace/report-token", "POST"),
+  reportLinks: () => request<ReportLink[]>("/api/report-links"),
+  createReportLink: (scope: CreateReportLink) => request<ReportLink>("/api/report-links", "POST", scope),
+  regenerateReportLink: (id: string) => request<ReportLink>(`/api/report-links/${id}/token`, "POST"),
+  deleteReportLink: (id: string) => request<void>(`/api/report-links/${id}`, "DELETE"),
   tokens: () => request<ApiToken[]>("/api/tokens"),
   createToken: (name: string) => request<IssuedToken>("/api/tokens", "POST", { name }),
   revokeToken: (id: string) => request<void>(`/api/tokens/${id}`, "DELETE"),

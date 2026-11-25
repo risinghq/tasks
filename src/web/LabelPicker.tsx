@@ -20,11 +20,13 @@ export function LabelPicker(props: { value: string | null; onPick: (id: string |
 
   return (
     <>
-      <ul className={picker.options} aria-label="Etiquetas">
+      <ul className={picker.options} role="listbox" aria-label="Etiquetas">
         {labels.map((label) => (
           <li key={label.id} className={styles.row}>
             <button
               type="button"
+              role="option"
+              aria-selected={label.id === props.value}
               className={styles.label}
               style={labelStyle(label.color)}
               onClick={() => props.onPick(label.id)}
@@ -43,7 +45,13 @@ export function LabelPicker(props: { value: string | null; onPick: (id: string |
           </li>
         ))}
         <li>
-          <button type="button" className={picker.option} onClick={() => props.onPick(null)}>
+          <button
+            type="button"
+            role="option"
+            aria-selected={props.value === null}
+            className={picker.option}
+            onClick={() => props.onPick(null)}
+          >
             Sin etiqueta
             {props.value === null && <Check size={16} aria-label="Actual" />}
           </button>

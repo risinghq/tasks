@@ -108,7 +108,7 @@ test.describe("card back", () => {
       .poll(() => page.evaluate(`document.querySelector("${selector}").offsetHeight`))
       .toBeGreaterThan(line);
 
-    await expect(dialog(page).getByRole("button", { name: "Eliminar" })).not.toBeFocused();
+    await expect(dialog(page).getByRole("button", { name: "Más acciones" })).not.toBeFocused();
     await expect
       .poll(() =>
         page.evaluate(`(() => {
@@ -139,7 +139,7 @@ test.describe("card back", () => {
 
     await field(page).click();
     await field(page).fill("Nuevo");
-    await dialog(page).getByRole("heading", { name: "Descripción" }).click();
+    await dialog(page).getByText("Descripción", { exact: true }).click();
 
     await expect(tasks.list("En curso").locator("[data-card-id]")).toHaveText(["Nuevo"]);
     await expect.poll(async () => (await tasks.board()).cards[0]?.title).toBe("Nuevo");
@@ -175,7 +175,7 @@ test.describe("card back", () => {
     await expect(progress).toHaveAttribute("aria-valuenow", "0");
     await Promise.all([
       page.waitForResponse((res) => res.request().method() === "PATCH"),
-      dialog(page).getByRole("checkbox", { name: "Marcar: a" }).check(),
+      dialog(page).getByRole("checkbox", { name: "a" }).click(),
     ]);
     await expect(progress).toHaveAttribute("aria-valuenow", "25");
     await expect
@@ -186,9 +186,32 @@ test.describe("card back", () => {
       .toBe(true);
 
     await page.reload();
-    await expect(dialog(page).getByRole("checkbox", { name: "Marcar: a" })).toBeChecked();
+    await expect(dialog(page).getByRole("checkbox", { name: "a" })).toHaveAttribute("aria-checked", "true");
     await expect(dialog(page).getByRole("progressbar")).toHaveAttribute("aria-valuenow", "25");
-    await expect(dialog(page).getByText("25%")).toBeVisible();
+    await expect(dialog(page).getByText("1 de 4")).toBeVisible();
+  });
+
+  test("the keyboard toggles a checklist item", async ({ page, tasks }) => {
+    await tasks.seed([
+      {
+        title: "Con lista",
+        list: "en_curso",
+        checklist: ["a", "b"].map((text) => ({ text, done: false })),
+      },
+    ]);
+    await tasks.open();
+    await tasks.card("Con lista").click();
+
+    const item = dialog(page).getByRole("checkbox", { name: "b" });
+    await item.focus();
+    await item.press("Space");
+    await expect(item).toHaveAttribute("aria-checked", "true");
+    await expect
+      .poll(
+        async () =>
+          (await tasks.board()).cards.find((card) => card.title === "Con lista")?.checklist[1]?.done,
+      )
+      .toBe(true);
   });
 
   test("a card URL opens the card and the back button closes it", async ({ page, tasks }) => {
@@ -350,7 +373,9 @@ test.describe("delete", () => {
     await tasks.open();
 
     await tasks.card("Uno").click();
-    await dialog(page).getByRole("button", { name: "Eliminar" }).click();
+    await dialog(page).getByRole("button", { name: "Más acciones" }).click();
+    await page.getByRole("menuitem", { name: "Eliminar tarjeta…" }).click();
+    await page.getByRole("button", { name: "Sí, eliminar" }).click();
     const active = tasks.list("En curso").locator("[data-card-id]");
     await expect(active).toHaveText(["Dos"]);
 
@@ -371,7 +396,9 @@ test.describe("delete", () => {
     await tasks.open();
 
     await tasks.card("Uno").click();
-    await dialog(page).getByRole("button", { name: "Eliminar" }).click();
+    await dialog(page).getByRole("button", { name: "Más acciones" }).click();
+    await page.getByRole("menuitem", { name: "Eliminar tarjeta…" }).click();
+    await page.getByRole("button", { name: "Sí, eliminar" }).click();
     const toast = page.getByRole("status").filter({ hasText: "Tarjeta eliminada." });
     await expect(toast).toBeVisible();
     expect((await tasks.board()).cards).toHaveLength(2);
@@ -469,7 +496,7 @@ test.describe("labels", () => {
     await page.getByRole("radio", { name: "Azul" }).check({ force: true });
     await page.getByRole("button", { name: "Guardar", exact: true }).click();
     await expect(stripe).not.toHaveCSS("background-color", red);
-    await page.getByRole("button", { name: "Sin etiqueta" }).click();
+    await page.getByRole("option", { name: "Sin etiqueta" }).click();
     await dialog(page).getByRole("button", { name: "Cerrar" }).click();
     await expect(stripe).toHaveCount(0);
   });
@@ -547,20 +574,19 @@ test.describe("four lists", () => {
     await expect(week.locator("[data-card-id]")).toHaveText(["Planeada", "Otra"]);
   });
 
-  test("the move popover offers the four lists", async ({ page, tasks }) => {
+  test("the Lista picker offers the four lists", async ({ page, tasks }) => {
     await tasks.seed([{ title: "Viajera", list: "pendiente" }]);
     await tasks.open();
     await tasks.card("Viajera").click();
 
-    await dialog(page).getByRole("button", { name: "Mover", exact: true }).click();
-    await expect(page.getByLabel("Lista", { exact: true }).locator("option")).toHaveText([
-      "Pendiente (actual)",
+    await dialog(page).getByRole("button", { name: "Lista", exact: true }).click();
+    await expect(page.getByRole("listbox", { name: "Lista" }).getByRole("option")).toHaveText([
+      "Pendiente",
       "Esta semana",
       "En curso",
       "Hecho",
     ]);
-    await page.getByLabel("Lista", { exact: true }).selectOption("esta_semana");
-    await page.getByRole("button", { name: "Mover", exact: true }).last().click();
+    await page.getByRole("option", { name: "Esta semana" }).click();
 
     await expect(tasks.list("Esta semana").locator("[data-card-id]")).toHaveText(["Viajera"]);
     await expect.poll(async () => (await tasks.board()).cards[0]?.list).toBe("esta_semana");
@@ -634,18 +660,38 @@ test.describe("card back fields", () => {
     await tasks.open();
     await tasks.card("Con nota").click();
 
-    await dialog(page).getByText("Añade una descripción más detallada…").click();
     const text = dialog(page).getByRole("textbox", { name: "Descripción" });
+    await text.click();
     await text.fill("No se guarda");
     await page.keyboard.press("Escape");
     await expect(dialog(page)).toBeVisible();
-    await expect(dialog(page).getByText("Añade una descripción más detallada…")).toBeVisible();
+    await expect(text).toHaveValue("");
 
-    await dialog(page).getByText("Añade una descripción más detallada…").click();
+    await text.click();
     await text.fill("Texto final");
     await text.press("Control+Enter");
-    await expect(dialog(page).getByText("Texto final")).toBeVisible();
+    await expect(text).toHaveValue("Texto final");
     await expect.poll(async () => (await tasks.board()).cards[0]?.description).toBe("Texto final");
+  });
+
+  test("the Etiqueta and Solicitante rows change the card", async ({ page, tasks }) => {
+    await tasks.seed([
+      { title: "Con datos", list: "en_curso", label: { name: "Urgente", color: "red" }, requester: "Ana" },
+      { title: "Vacía", list: "en_curso" },
+    ]);
+    await tasks.open();
+    await tasks.card("Vacía").click();
+
+    await dialog(page).getByRole("button", { name: "Etiqueta", exact: true }).click();
+    await page.getByRole("option", { name: "Urgente" }).click();
+    await dialog(page).getByRole("button", { name: "Solicitante", exact: true }).click();
+    await page.getByRole("option", { name: "Ana" }).click();
+
+    await expect
+      .poll(async () => (await tasks.board()).cards.find((card) => card.title === "Vacía"))
+      .toMatchObject({ requester: "Ana" });
+    const board = await tasks.board();
+    expect(board.cards.find((card) => card.title === "Vacía")?.labelId).toBe(board.labels[0]!.id);
   });
 
   test("a full checklist offers no more items", async ({ page, tasks }) => {
@@ -664,7 +710,7 @@ test.describe("card back fields", () => {
     await tasks.open();
     await tasks.card("Con lista").click();
 
-    await dialog(page).getByRole("button", { name: "Checklist", exact: true }).click();
+    await dialog(page).getByRole("button", { name: "Añadir checklist" }).click();
     const input = dialog(page).getByRole("textbox", { name: "Nuevo elemento" });
     await input.fill("Primero");
     await input.press("Enter");
@@ -692,14 +738,13 @@ test.describe("card back fields", () => {
     await expect(popover.getByRole("button", { name: "Guardar" })).toBeDisabled();
   });
 
-  test("Mover on the card back sends a card to Hecho", async ({ page, tasks }) => {
+  test("the Lista row on the card back sends a card to Hecho", async ({ page, tasks }) => {
     await tasks.seed([{ title: "Viajera", list: "en_curso" }]);
     await tasks.open();
     await tasks.card("Viajera").click();
 
-    await dialog(page).getByRole("button", { name: "Mover", exact: true }).click();
-    await page.getByLabel("Lista", { exact: true }).selectOption("hecho");
-    await page.getByRole("button", { name: "Mover", exact: true }).last().click();
+    await dialog(page).getByRole("button", { name: "Lista", exact: true }).click();
+    await page.getByRole("option", { name: "Hecho" }).click();
 
     await expect(tasks.list("Hecho").locator("[data-card-id]")).toHaveText(["Viajera"]);
     await expect.poll(async () => (await tasks.board()).cards[0]?.list).toBe("hecho");

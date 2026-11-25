@@ -8,6 +8,7 @@ const FIRST_USER = "00000000-0000-4000-8000-000000000001";
 const TABLES = [
   "api_tokens",
   "cards",
+  "report_links",
   "labels",
   "login_attempts",
   "links",
@@ -97,8 +98,10 @@ describe("the accounts migration on a database with data", () => {
       });
       expect(cards.find((card) => card.id === "c6")?.doneDate).toBe("2026-10-15");
 
-      expect((await me.workspaceSettings()).reportToken).toBe(OLD_TOKEN);
-      const report = await send(`/r/${OLD_TOKEN}?semana=2026-W42`);
+      // The report_token column is gone. The workspace's link is created on
+      // demand, so the old shared address no longer opens.
+      expect((await send(`/r/${OLD_TOKEN}`)).status).toBe(404);
+      const report = await send(`/r/${await me.wholeReportToken()}?semana=2026-W42`);
       expect(report.status).toBe(200);
       expect(await report.text()).toContain("Terminada sin etiqueta");
     } finally {
